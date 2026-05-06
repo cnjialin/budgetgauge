@@ -1,0 +1,21 @@
+{
+  "name": "budget-gauge-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/generate-build-stamp.mjs && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^7.1.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
+    "@supabase/supabase-js": "^2.101.1",
+    "flatpickr": "^4.6.13"
+  }
+}

@@ -1,0 +1,249 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget Gauge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="gauge-page">
+    <p id="debugBuildBadge" class="debug-build-badge">beta</p>
+    <header class="gauge-head">
+      <p class="gauge-kicker">Budget Cluster</p>
+      <p id="connectionStatus" class="connection-status">本地模式</p>
+    </header>
+
+    <section class="gauge-orb" aria-labelledby="gaugeTitle">
+      <div class="gauge-stage">
+        <svg id="budgetGauge" class="budget-gauge" viewBox="0 0 420 420" aria-label="额度仪表盘" role="img">
+          <defs>
+            <linearGradient id="trackGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#19273f"></stop>
+              <stop offset="100%" stop-color="#0a1221"></stop>
+            </linearGradient>
+            <linearGradient id="valueGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#69f0c3"></stop>
+              <stop offset="55%" stop-color="#89f6ff"></stop>
+              <stop offset="100%" stop-color="#6f9dff"></stop>
+            </linearGradient>
+            <linearGradient id="warningGradient" x1="100%" y1="0%" x2="0%" y2="0%">
+              <stop offset="0%" stop-color="#ffb36b"></stop>
+              <stop offset="58%" stop-color="#ff7d88"></stop>
+              <stop offset="82%" stop-color="#ff475f"></stop>
+              <stop offset="100%" stop-color="#ff243e"></stop>
+            </linearGradient>
+          </defs>
+          <path id="gaugeReferencePath" class="gauge-reference"></path>
+          <path id="gaugeValuePath" class="gauge-value"></path>
+          <g id="gaugeTicks" class="gauge-ticks"></g>
+          <line id="gaugeBudgetMarker" class="gauge-budget-marker"></line>
+        </svg>
+
+        <button id="openExpenseModalBtn" class="gauge-center" type="button" aria-haspopup="dialog" aria-controls="expenseModal">
+          <p class="center-label">当前剩余</p>
+          <strong id="remainingBudget">¥0.00</strong>
+          <span id="usageText">已使用 0%</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="fab-dock" aria-label="快捷操作">
+      <button id="openHistoryBtn" class="settings-fab" type="button" aria-haspopup="dialog" aria-controls="historyModal" aria-label="查看历史消费">
+        <span class="settings-fab-ring"></span>
+        <span class="settings-fab-core" aria-hidden="true">
+          <svg class="settings-icon stroke-icon" viewBox="0 0 24 24" role="presentation">
+            <circle cx="12" cy="12" r="7.5"></circle>
+            <path class="clock-hand" d="M12 8.3v4.1l2.8 1.7"></path>
+          </svg>
+        </span>
+      </button>
+
+      <button id="openSettingsBtn" class="settings-fab" type="button" aria-haspopup="dialog" aria-controls="settingsModal" aria-label="打开设置">
+        <span class="settings-fab-ring"></span>
+        <span class="settings-fab-core" aria-hidden="true">
+          <svg class="settings-icon" viewBox="0 0 24 24" role="presentation">
+            <path d="M19.14 12.94c.04-.31.06-.62.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.19 7.19 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42l-.36 2.54c-.58.22-1.13.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.41 1.05.72 1.63.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.58-.22 1.13-.53 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"></path>
+          </svg>
+        </span>
+      </button>
+    </section>
+
+    <p class="credit-line">
+      <span>built with</span>
+      <a href="https://openai.com/codex/" target="_blank" rel="noreferrer">codex</a>
+    </p>
+  </main>
+
+  <div id="expenseModal" class="expense-modal" hidden>
+    <div id="expenseBackdrop" class="expense-backdrop"></div>
+    <section class="expense-card" role="dialog" aria-modal="true" aria-labelledby="expenseModalTitle">
+      <p class="expense-kicker">Quick Expense</p>
+      <h2 id="expenseModalTitle">记录一笔消费</h2>
+      <label class="expense-field">
+        <span>消费时间</span>
+        <button id="expenseDateTimeTrigger" class="expense-datetime-trigger" type="button">选择消费时间</button>
+      </label>
+      <label class="expense-field">
+        <span>消费金额</span>
+        <input id="expenseAmountInput" type="number" min="0" step="0.01" placeholder="例如 32.50">
+      </label>
+      <div class="expense-field">
+        <span>用途</span>
+        <div id="purposeOptions" class="purpose-options" role="listbox" aria-label="用途快捷选项">
+          <button class="purpose-chip" type="button" data-purpose="食">食</button>
+          <button class="purpose-chip" type="button" data-purpose="穿">穿</button>
+          <button class="purpose-chip" type="button" data-purpose="住">住</button>
+          <button class="purpose-chip" type="button" data-purpose="用">用</button>
+          <button class="purpose-chip" type="button" data-purpose="行">行</button>
+        </div>
+        <input id="expensePurposeInput" type="text" maxlength="30" placeholder="也可以自己输入用途">
+      </div>
+      <div class="expense-actions">
+        <button id="cancelExpenseBtn" class="expense-btn ghost" type="button">取消</button>
+        <button id="confirmExpenseBtn" class="expense-btn primary" type="button">确定</button>
+      </div>
+      <p id="expenseStatus" class="modal-status" aria-live="polite"></p>
+
+      <div id="dateTimePickerModal" class="datetime-picker-modal" hidden>
+        <div class="datetime-picker-card" role="dialog" aria-modal="true" aria-labelledby="dateTimePickerTitle">
+          <div class="datetime-picker-head android-picker-head">
+            <p id="pickerDisplayYear" class="picker-display-year">2026年</p>
+            <h3 id="pickerDisplayDate" class="picker-display-date">4月3日周五</h3>
+          </div>
+          <div class="datetime-picker-toolbar">
+            <button id="pickerPrevMonthBtn" class="calendar-nav-btn" type="button" aria-label="上一个月">‹</button>
+            <strong id="pickerMonthLabel" class="picker-month-label">2026年4月</strong>
+            <button id="pickerNextMonthBtn" class="calendar-nav-btn" type="button" aria-label="下一个月">›</button>
+          </div>
+          <div class="calendar-weekdays" aria-hidden="true">
+            <span>日</span>
+            <span>一</span>
+            <span>二</span>
+            <span>三</span>
+            <span>四</span>
+            <span>五</span>
+            <span>六</span>
+          </div>
+          <div id="pickerCalendarGrid" class="calendar-grid" role="grid" aria-labelledby="dateTimePickerTitle"></div>
+          <div class="datetime-picker-grid">
+            <div class="time-wheel-picker" aria-label="选择时间">
+              <div class="time-wheel-column">
+                <span>时</span>
+                <div class="time-wheel-shell">
+                  <div id="pickerHourWheel" class="time-wheel-list"></div>
+                </div>
+              </div>
+              <div class="time-wheel-column">
+                <span>分</span>
+                <div class="time-wheel-shell">
+                  <div id="pickerMinuteWheel" class="time-wheel-list"></div>
+                </div>
+              </div>
+              <div class="time-wheel-column">
+                <span>秒</span>
+                <div class="time-wheel-shell">
+                  <div id="pickerSecondWheel" class="time-wheel-list"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="datetime-picker-actions">
+            <button id="dateTimeNowBtn" class="expense-btn ghost" type="button">现在</button>
+            <button id="dateTimeCancelBtn" class="expense-btn ghost" type="button">取消</button>
+            <button id="dateTimeConfirmBtn" class="expense-btn primary" type="button">确定</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="settingsModal" class="settings-modal" hidden>
+    <div id="settingsBackdrop" class="expense-backdrop"></div>
+    <section class="settings-card" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+      <p class="expense-kicker">Preferences</p>
+      <h2 id="settingsModalTitle">账户设置</h2>
+      <label class="expense-field settings-auth-field settings-connection-field">
+        <span>Supabase URL</span>
+        <input id="supabaseUrlInput" type="url" maxlength="200" placeholder="输入你的 Supabase 项目 URL">
+      </label>
+      <label class="expense-field settings-auth-field settings-connection-field">
+        <span>Supabase Key</span>
+        <input id="supabaseKeyInput" type="text" maxlength="300" placeholder="输入你的 publishable / anon key">
+      </label>
+      <label class="expense-field settings-auth-field settings-connection-field">
+        <span>邮箱</span>
+        <input id="emailInput" type="email" maxlength="60" placeholder="输入你的 Supabase 邮箱">
+      </label>
+      <label class="expense-field settings-auth-field settings-connection-field">
+        <span>密码</span>
+        <input id="passwordInput" type="password" maxlength="32" placeholder="输入你的密码">
+      </label>
+      <label class="expense-field settings-budget-field">
+        <span>每月总额度</span>
+        <input id="monthlyBudgetInput" type="number" min="0" step="100" placeholder="例如 5000">
+      </label>
+      <div class="expense-actions settings-actions">
+          <button id="logoutSettingsBtn" class="expense-btn ghost settings-auth-action" type="button">登出</button>
+        <button id="cancelSettingsBtn" class="expense-btn ghost" type="button">取消</button>
+        <button id="saveSettingsBtn" class="expense-btn primary" type="button">保存</button>
+      </div>
+      <p id="settingsStatus" class="modal-status" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <div id="historyModal" class="settings-modal" hidden>
+    <div id="historyBackdrop" class="expense-backdrop"></div>
+    <section class="settings-card history-card" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+      <p class="expense-kicker">Expense History</p>
+      <h2 id="historyModalTitle">历史消费</h2>
+      <div class="history-filter" role="tablist" aria-label="历史范围" data-active="today">
+        <button id="historyTodayBtn" class="history-tab active" type="button" role="tab" aria-selected="true">今天</button>
+        <button id="historyMonthBtn" class="history-tab" type="button" role="tab" aria-selected="false">本月</button>
+      </div>
+      <div id="historyPagerViewport" class="history-pager-viewport">
+        <div id="historyPagerTrack" class="history-pager-track">
+          <section class="history-page" aria-label="今天消费记录">
+            <div id="historyTodayList" class="history-list"></div>
+          </section>
+          <section class="history-page" aria-label="本月消费记录">
+            <div id="historyMonthList" class="history-list"></div>
+          </section>
+        </div>
+      </div>
+      <div class="expense-actions history-actions">
+        <button id="closeHistoryBtn" class="expense-btn ghost" type="button">关闭</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="releaseInfoModal" class="settings-modal" hidden>
+    <div id="releaseInfoBackdrop" class="expense-backdrop"></div>
+    <section class="settings-card release-info-card" role="dialog" aria-modal="true" aria-labelledby="releaseInfoTitle">
+      <p class="expense-kicker">Version</p>
+      <h2 id="releaseInfoTitle">版本信息</h2>
+        <div class="release-info-body">
+          <p class="release-info-row">
+            <span>当前版本</span>
+            <strong id="currentVersionValue">v0.1.0</strong>
+            <span id="releaseInfoStatus" class="release-info-status">当前已是最新版本</span>
+          </p>
+          <div id="releaseDownloadChoices" class="release-download-choices" hidden>
+            <div class="release-download-actions">
+              <a id="releaseGithubLink" class="expense-btn primary release-download-btn" href="https://github.com/cnjialin/budgetgauge/releases" target="_blank" rel="noopener noreferrer">GitHub</a>
+              <a id="releaseBaiduLink" class="expense-btn primary release-download-btn" href="https://pan.baidu.com/s/1zKfk8u8o7KXZt4xQrNx8Dg?pwd=6666" target="_blank" rel="noopener noreferrer">百度云</a>
+            </div>
+          </div>
+        </div>
+        <div class="expense-actions release-info-actions">
+          <button id="closeReleaseInfoBtn" class="expense-btn ghost" type="button">关闭</button>
+        </div>
+      </section>
+  </div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

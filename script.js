@@ -17,14 +17,18 @@ const PASSWORD_KEY = "budget-gauge-password";
 const HISTORY_KEY = "budget-gauge-history";
 const CLOUD_HISTORY_KEY = "budget-gauge-cloud-history";
 const RELEASE_INFO_CACHE_KEY = "budget-gauge-release-info";
+const THEME_KEY = "budget-gauge-theme";
+const THEMES = new Set(["default", "forest"]);
 
 const supabaseUrlInput = document.querySelector("#supabaseUrlInput");
 const supabaseKeyInput = document.querySelector("#supabaseKeyInput");
 const monthlyBudgetInput = document.querySelector("#monthlyBudgetInput");
 const openExpenseModalBtn = document.querySelector("#openExpenseModalBtn");
 const toggleGaugeModeBtn = document.querySelector("#toggleGaugeModeBtn");
+const homeTabBtn = document.querySelector("#homeTabBtn");
 const openHistoryBtn = document.querySelector("#openHistoryBtn");
 const openSettingsBtn = document.querySelector("#openSettingsBtn");
+const bottomSettingsBtn = document.querySelector("#bottomSettingsBtn");
 const connectionStatusEl = document.querySelector("#connectionStatus");
 const centerLabelEl = document.querySelector(".center-label");
 const remainingBudgetEl = document.querySelector("#remainingBudget");
@@ -85,12 +89,14 @@ const releaseInfoStatus = document.querySelector("#releaseInfoStatus");
 const releaseDownloadChoices = document.querySelector("#releaseDownloadChoices");
 const releaseGithubLink = document.querySelector("#releaseGithubLink");
 const releaseBaiduLink = document.querySelector("#releaseBaiduLink");
+const themeButtons = [...document.querySelectorAll(".theme-option")];
 
 let supabaseUrl = loadText(SUPABASE_URL_KEY) || DEFAULT_SUPABASE_URL;
 let supabaseKey = loadText(SUPABASE_KEY_KEY) || DEFAULT_SUPABASE_KEY;
 let monthlyBudgetLimit = loadNumber(MONTHLY_BUDGET_KEY, 5000);
 let email = loadText(EMAIL_KEY);
 let password = loadText(PASSWORD_KEY);
+let selectedTheme = normalizeTheme(loadText(THEME_KEY));
 let expenseHistory = loadHistory();
 let historyRange = "today";
 let monthHistorySummaryCache = null;
@@ -113,8 +119,12 @@ let hasPlayedInitialGaugeAnimation = false;
 let shouldReplayGaugeAnimationOnVisible = false;
 let supabase = createSupabaseClient(supabaseUrl, supabaseKey);
 let isBudgetOnlySettingsMode = false;
+let activeMainView = "home";
+let pageTransitionTimer = 0;
 let latestReleaseInfo = null;
 let lastTouchY = 0;
+let viewportMetricsFrame = 0;
+let focusedEditable = null;
 let selectedExpenseDateTime = new Date();
 let pickerDraftDateTime = new Date();
 const timeWheelScrollTimers = new Map();
@@ -128,19 +138,23 @@ initialize();
 
 async function initialize() {
   latestReleaseInfo = null;
+  applyTheme(selectedTheme);
   applyReleaseBadgeState(null);
   setupGauge();
   setHistoryRange(historyRange, false);
+  setActiveMainView("home");
   setGaugeMode(false);
   disableDataScopeButton();
+  setupKeyboardViewport();
   hydrateInitialExpenseHistory();
   playInitialGaugeAnimation();
 
   openExpenseModalBtn.addEventListener("click", handleGaugeCenterClick);
+  homeTabBtn.addEventListener("click", openHomeView);
   openHistoryBtn.addEventListener("click", openHistoryModal);
-  openSettingsBtn.addEventListener("click", openSettingsModal);
+  openSettingsBtn.addEventListener("click", toggleReleaseInfoFromTopMenu);
+  bottomSettingsBtn.addEventListener("click", () => openSettingsModal());
   connectionStatusEl.addEventListener("click", openConnectionSettingsModal);
-  debugBuildBadge.addEventListener("click", handleReleaseBadgeClick);
   cancelExpenseBtn.addEventListener("click", closeExpenseModal);
   confirmExpenseBtn.addEventListener("click", confirmExpense);
   expenseBackdrop.addEventListener("click", closeExpenseModal);
@@ -156,6 +170,7 @@ async function initialize() {
   historyCard.addEventListener("touchmove", handleHistorySwipeMove, { passive: false });
   historyCard.addEventListener("touchend", handleHistorySwipeEnd, { passive: true });
   historyCard.addEventListener("touchcancel", handleHistorySwipeCancel, { passive: true });
+  themeButtons.forEach((button) => button.addEventListener("click", () => setTheme(button.dataset.themeValue)));
   closeReleaseInfoBtn.addEventListener("click", closeReleaseInfoModal);
   releaseInfoBackdrop.addEventListener("click", closeReleaseInfoModal);
   expenseDateTimeTrigger.addEventListener("click", openDateTimePicker);
@@ -178,6 +193,114 @@ async function initialize() {
 
   hydrateSupabaseState();
   checkForAppUpdate();
+}
+
+function setupKeyboardViewport() {
+  syncViewportMetrics();
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", syncViewportMetrics);
+    window.visualViewport.addEventListener("scroll", syncViewportMetrics);
+  }
+
+  window.addEventListener("resize", syncViewportMetrics);
+  document.addEventListener("focusin", handleEditableFocusIn);
+  document.addEventListener("focusout", handleEditableFocusOut);
+}
+
+function syncViewportMetrics() {
+  if (viewportMetricsFrame) {
+    return;
+  }
+
+  viewportMetricsFrame = requestAnimationFrame(() => {
+    viewportMetricsFrame = 0;
+    const viewport = window.visualViewport;
+    const viewportHeight = Math.max(320, Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight));
+    const layoutHeight = Math.round(window.innerHeight || viewportHeight);
+    const viewportTop = Math.round(viewport?.offsetTop || 0);
+    const keyboardInset = Math.max(0, layoutHeight - viewportHeight - viewportTop);
+
+    document.documentElement.style.setProperty("--app-viewport-height", `${viewportHeight}px`);
+    document.documentElement.style.setProperty("--keyboard-inset", `${keyboardInset}px`);
+    document.body.classList.toggle("keyboard-open", keyboardInset > 80);
+
+    if (focusedEditable) {
+      requestAnimationFrame(() => scrollFocusedControlIntoView(focusedEditable));
+    }
+  });
+}
+
+function handleEditableFocusIn(event) {
+  if (!isKeyboardEditable(event.target)) {
+    return;
+  }
+
+  focusedEditable = event.target;
+  syncViewportMetrics();
+  window.setTimeout(() => scrollFocusedControlIntoView(focusedEditable), 80);
+  window.setTimeout(() => scrollFocusedControlIntoView(focusedEditable), 300);
+}
+
+function handleEditableFocusOut(event) {
+  if (focusedEditable !== event.target) {
+    return;
+  }
+
+  window.setTimeout(() => {
+    if (!isKeyboardEditable(document.activeElement)) {
+      focusedEditable = null;
+      syncViewportMetrics();
+    }
+  }, 80);
+}
+
+function isKeyboardEditable(target) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+    return true;
+  }
+
+  if (!(target instanceof HTMLInputElement)) {
+    return false;
+  }
+
+  return !["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"].includes(target.type);
+}
+
+function scrollFocusedControlIntoView(control) {
+  if (!control || !document.contains(control)) {
+    return;
+  }
+
+  const scrollable = control.closest(".settings-card, .expense-card");
+  if (!scrollable) {
+    control.scrollIntoView({ block: "center", inline: "nearest" });
+    return;
+  }
+
+  const viewport = window.visualViewport;
+  const visualTop = viewport?.offsetTop || 0;
+  const visualBottom = visualTop + (viewport?.height || window.innerHeight || document.documentElement.clientHeight);
+  const rect = control.getBoundingClientRect();
+  const bottomGap = 28;
+  const topGap = 18;
+
+  if (rect.bottom > visualBottom - bottomGap) {
+    scrollable.scrollTop += rect.bottom - visualBottom + bottomGap;
+    return;
+  }
+
+  if (rect.top < visualTop + topGap) {
+    scrollable.scrollTop -= visualTop + topGap - rect.top;
+  }
 }
 
 function openExpenseModal() {
@@ -213,12 +336,112 @@ function handleGaugeCenterClick(event) {
   openExpenseModal();
 }
 
-function openSettingsModal(mode = "full") {
+function normalizeTheme(value) {
+  return THEMES.has(value) ? value : "forest";
+}
+
+function applyTheme(theme) {
+  selectedTheme = normalizeTheme(theme);
+  document.body.dataset.theme = selectedTheme;
+
+  themeButtons.forEach((button) => {
+    const isActive = button.dataset.themeValue === selectedTheme;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-checked", String(isActive));
+  });
+}
+
+function setTheme(theme) {
+  applyTheme(theme);
+  localStorage.setItem(THEME_KEY, selectedTheme);
+}
+
+function setActiveMainView(nextView) {
+  activeMainView = nextView;
+  document.body.dataset.view = nextView;
+  homeTabBtn.classList.toggle("active", nextView === "home");
+  openHistoryBtn.classList.toggle("active", nextView === "history");
+  bottomSettingsBtn.classList.toggle("active", nextView === "settings");
+  openSettingsBtn.classList.toggle("is-active", nextView === "release");
+  homeTabBtn.toggleAttribute("aria-current", nextView === "home");
+  openHistoryBtn.toggleAttribute("aria-current", nextView === "history");
+  bottomSettingsBtn.toggleAttribute("aria-current", nextView === "settings");
+  openSettingsBtn.setAttribute("aria-expanded", String(nextView === "release"));
+}
+
+function showPageView(pageEl, { animate = false } = {}) {
+  if (pageTransitionTimer) {
+    window.clearTimeout(pageTransitionTimer);
+    pageTransitionTimer = 0;
+  }
+
+  pageEl.hidden = false;
+  pageEl.classList.add("is-page-view");
+  pageEl.classList.toggle("is-animated", animate);
+  pageEl.classList.remove("is-visible");
+  pageEl.getBoundingClientRect();
+  requestAnimationFrame(() => {
+    pageEl.classList.add("is-visible");
+  });
+}
+
+function hidePageView(pageEl, { animate = false } = {}) {
+  if (pageTransitionTimer) {
+    window.clearTimeout(pageTransitionTimer);
+    pageTransitionTimer = 0;
+  }
+
+  pageEl.classList.remove("is-visible");
+
+  const finish = () => {
+    pageEl.hidden = true;
+    pageEl.classList.remove("is-page-view");
+    pageEl.classList.remove("is-animated");
+  };
+
+  if (animate && pageEl.classList.contains("is-page-view") && pageEl.classList.contains("is-animated")) {
+    pageTransitionTimer = window.setTimeout(() => {
+      pageTransitionTimer = 0;
+      finish();
+    }, 300);
+    return;
+  }
+
+  finish();
+}
+
+function openHomeView() {
+  hidePageView(settingsModal);
+  hidePageView(historyModal);
+  hidePageView(releaseInfoModal);
+  settingsCard.classList.remove("budget-only");
+  settingsCard.classList.remove("connection-only");
+  isBudgetOnlySettingsMode = false;
+  handleHistorySwipeCancel();
+  setActiveMainView("home");
+  renderGauge();
+}
+
+function toggleReleaseInfoFromTopMenu() {
+  if (!releaseInfoModal.hidden && activeMainView === "release") {
+    closeReleaseInfoModal({ animate: true });
+    return;
+  }
+
+  openReleaseInfoModal({ animate: true });
+}
+
+function openSettingsModal(mode = "full", options = {}) {
   isBudgetOnlySettingsMode = mode === "budget";
-  settingsModal.hidden = false;
+  hidePageView(historyModal);
+  hidePageView(releaseInfoModal);
+  showPageView(settingsModal, options);
   settingsCard.classList.toggle("budget-only", isBudgetOnlySettingsMode);
   settingsCard.classList.toggle("connection-only", mode === "connection");
+  settingsCard.setAttribute("role", "region");
+  settingsCard.removeAttribute("aria-modal");
   settingsModalTitle.textContent = isBudgetOnlySettingsMode ? "额度设置" : "账户设置";
+  setActiveMainView("settings");
   supabaseUrlInput.value = supabaseUrl;
   supabaseKeyInput.value = supabaseKey;
   emailInput.value = email;
@@ -246,24 +469,35 @@ function openConnectionSettingsModal() {
   openSettingsModal("connection");
 }
 
-function closeSettingsModal() {
-  settingsModal.hidden = true;
+function closeSettingsModal(options = {}) {
+  hidePageView(settingsModal, options);
+  settingsCard.setAttribute("role", "dialog");
+  settingsCard.setAttribute("aria-modal", "true");
   settingsCard.classList.remove("budget-only");
   settingsCard.classList.remove("connection-only");
   isBudgetOnlySettingsMode = false;
+  setActiveMainView("home");
+  renderGauge();
   openSettingsBtn.focus();
 }
 
 async function openHistoryModal() {
   renderHistory();
-  historyModal.hidden = false;
+  hidePageView(settingsModal);
+  hidePageView(releaseInfoModal);
+  showPageView(historyModal);
+  historyCard.setAttribute("role", "region");
+  historyCard.removeAttribute("aria-modal");
+  setActiveMainView("history");
   applyHistoryPagerPosition(false);
-  closeHistoryBtn.focus();
 }
 
 function closeHistoryModal() {
-  historyModal.hidden = true;
-  handleHistorySwipeCancel();
+  hidePageView(historyModal);
+  historyCard.setAttribute("role", "dialog");
+  historyCard.setAttribute("aria-modal", "true");
+  setActiveMainView("home");
+  renderGauge();
   openHistoryBtn.focus();
 }
 
@@ -343,7 +577,7 @@ function handleHistorySwipeCancel() {
   applyHistoryPagerPosition(false);
 }
 
-function openReleaseInfoModal() {
+function openReleaseInfoModal(options = {}) {
   currentVersionValue.textContent = APP_RELEASE_TAG;
 
   if (latestReleaseInfo?.downloadUrl) {
@@ -356,11 +590,22 @@ function openReleaseInfoModal() {
     releaseDownloadChoices.hidden = true;
   }
 
-  releaseInfoModal.hidden = false;
+  hidePageView(settingsModal);
+  hidePageView(historyModal);
+  showPageView(releaseInfoModal, options);
+  releaseInfoModal.classList.add("is-page-view");
+  releaseInfoModal.classList.toggle("is-animated", Boolean(options.animate));
+  releaseInfoModal.querySelector(".release-info-card")?.setAttribute("role", "region");
+  releaseInfoModal.querySelector(".release-info-card")?.removeAttribute("aria-modal");
+  setActiveMainView("release");
 }
 
-function closeReleaseInfoModal() {
-  releaseInfoModal.hidden = true;
+function closeReleaseInfoModal(options = {}) {
+  hidePageView(releaseInfoModal, options);
+  releaseInfoModal.querySelector(".release-info-card")?.setAttribute("role", "dialog");
+  releaseInfoModal.querySelector(".release-info-card")?.setAttribute("aria-modal", "true");
+  setActiveMainView("home");
+  renderGauge();
 }
 
 async function confirmExpense() {
@@ -674,6 +919,11 @@ function applyReleaseBadgeState(releaseInfo) {
       ? `发现新版本 ${releaseInfo.tag}，点击查看版本信息`
       : "点击查看当前版本",
   );
+  openSettingsBtn.classList.toggle("is-update", hasUpdate);
+  openSettingsBtn.setAttribute(
+    "aria-label",
+    hasUpdate ? `发现新版本 ${releaseInfo.tag}，打开版本信息` : "打开版本信息",
+  );
 }
 
 function loadCachedReleaseInfo() {
@@ -866,7 +1116,7 @@ function handleDocumentTouchMove(event) {
     return;
   }
 
-  const scrollable = target.closest(".settings-card, .history-list, .time-wheel-list");
+  const scrollable = target.closest(".settings-card, .expense-card, .history-list, .time-wheel-list");
   if (!scrollable) {
     event.preventDefault();
     return;
@@ -1804,12 +2054,11 @@ function drawTicks(cx, cy, radius, startAngle, endAngle, tickCount) {
   for (let index = 0; index < tickCount; index += 1) {
     const ratio = index / (tickCount - 1);
     const angle = startAngle + sweep * ratio;
-    const isMajor = index % 4 === 0;
     const isThreshold = Math.abs(ratio - 0.5) < 0.0001;
     const outer = toCartesian(cx, cy, radius - 16, angle);
-    const inner = toCartesian(cx, cy, radius - (isMajor ? 34 : 26), angle);
+    const inner = toCartesian(cx, cy, radius - 26, angle);
     const tick = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    const tickClass = [isMajor ? "major" : "minor"];
+    const tickClass = ["minor"];
 
     if (isThreshold) {
       tickClass.push("threshold");

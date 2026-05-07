@@ -1,0 +1,69 @@
+<svg width="216" height="216" viewBox="0 0 216 216" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="26" y1="20" x2="194" y2="208" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#152B46"/>
+      <stop offset="0.55" stop-color="#0B1730"/>
+      <stop offset="1" stop-color="#07101E"/>
+    </linearGradient>
+    <radialGradient id="glowLeft" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(60 62) rotate(49.3) scale(88.6237 71.161)">
+      <stop stop-color="#57F0BF" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#57F0BF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowRight" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(166 54) rotate(129.26) scale(86.5922 69.5304)">
+      <stop stop-color="#6FA0FF" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#6FA0FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="track" x1="50" y1="155" x2="161" y2="50" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5D677B"/>
+      <stop offset="1" stop-color="#828DA4"/>
+    </linearGradient>
+    <linearGradient id="value" x1="56" y1="149" x2="152" y2="61" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#69F0C3"/>
+      <stop offset="0.52" stop-color="#89F6FF"/>
+      <stop offset="1" stop-color="#6F9DFF"/>
+    </linearGradient>
+    <filter id="softGlow" x="23" y="28" width="170" height="170" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="3.5" result="effect1_foregroundBlur"/>
+    </filter>
+  </defs>
+
+  <rect x="8" y="8" width="200" height="200" rx="44" fill="url(#bg)"/>
+  <rect x="8" y="8" width="200" height="200" rx="44" fill="url(#glowLeft)"/>
+  <rect x="8" y="8" width="200" height="200" rx="44" fill="url(#glowRight)"/>
+  <rect x="8.75" y="8.75" width="198.5" height="198.5" rx="43.25" stroke="rgba(255,255,255,0.08)"/>
+
+  <circle cx="108" cy="108" r="67" fill="rgba(7,16,30,0.8)" stroke="rgba(255,255,255,0.05)"/>
+  <circle cx="108" cy="108" r="55.5" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+
+  <g filter="url(#softGlow)">
+    <path d="M63.45 152.55C51.47 140.57 44 124.02 44 105.75C44 69.9 73.07 40.83 108.92 40.83C127.18 40.83 143.73 48.3 155.72 60.28" stroke="url(#track)" stroke-width="12" stroke-linecap="round"/>
+    <path d="M63.45 152.55C53.48 142.58 47.27 128.82 47.27 113.62C47.27 95.76 55.82 79.89 69.05 69.93" stroke="url(#value)" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <g stroke="#C5D6F2" stroke-linecap="round">
+    <line x1="61.3" y1="147.9" x2="67.6" y2="141.8" stroke-width="2.2"/>
+    <line x1="56.8" y1="138.6" x2="60.7" y2="135.4" stroke-width="1.4" opacity="0.72"/>
+    <line x1="53.5" y1="128.7" x2="58.4" y2="126.1" stroke-width="1.4" opacity="0.72"/>
+    <line x1="51.9" y1="118.6" x2="57.2" y2="117.5" stroke-width="1.4" opacity="0.72"/>
+    <line x1="52.3" y1="108.1" x2="57.7" y2="108.2" stroke-width="1.4" opacity="0.72"/>
+    <line x1="54.2" y1="97.8" x2="59.4" y2="99.1" stroke-width="1.4" opacity="0.72"/>
+    <line x1="58.1" y1="88.1" x2="63.1" y2="90.6" stroke-width="1.4" opacity="0.72"/>
+    <line x1="63.6" y1="79.4" x2="67.4" y2="82.9" stroke-width="1.4" opacity="0.72"/>
+    <line x1="70.4" y1="71.8" x2="76.4" y2="77.3" stroke-width="2.2"/>
+    <line x1="78.8" y1="66.4" x2="81.7" y2="70.9" stroke-width="1.4" opacity="0.72"/>
+    <line x1="88.3" y1="62.4" x2="90.1" y2="67.4" stroke-width="1.4" opacity="0.72"/>
+    <line x1="98.3" y1="60.4" x2="98.8" y2="65.8" stroke-width="1.4" opacity="0.72"/>
+    <line x1="108.6" y1="60.5" x2="108.1" y2="67.4" stroke-width="2.2"/>
+    <line x1="118.8" y1="62.4" x2="117" y2="67.4" stroke-width="1.4" opacity="0.72"/>
+    <line x1="128.5" y1="66.3" x2="125.7" y2="70.9" stroke-width="1.4" opacity="0.72"/>
+    <line x1="137.1" y1="72" x2="133.4" y2="75.9" stroke-width="1.4" opacity="0.72"/>
+    <line x1="144.8" y1="79.2" x2="139" y2="85" stroke-width="2.2"/>
+  </g>
+
+  <line x1="149.9" y1="96.8" x2="149.9" y2="118.8" stroke="#E7EDF8" stroke-width="3.2" stroke-linecap="round"/>
+
+  <text x="108" y="104" text-anchor="middle" fill="#D4E2F8" font-family="Space Grotesk, Arial, sans-serif" font-size="13" letter-spacing="0.02em">今日剩余</text>
+  <text x="108" y="126" text-anchor="middle" fill="white" font-family="Space Grotesk, Arial, sans-serif" font-size="26" font-weight="700">¥ 88</text>
+</svg>

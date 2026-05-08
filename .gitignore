@@ -25,6 +25,7 @@ Thumbs.db
 .vscode/
 .idea/
 *.iml
+*.un~
 
 # Local backups
 backup-*/

@@ -486,7 +486,7 @@ body:not([data-view="home"]) .debug-build-badge {
   --record-ring-bottom-boundary: calc(112px + env(safe-area-inset-bottom, 0px));
   position: fixed;
   left: 50%;
-  top: 50%;
+  top: calc(var(--app-viewport-height) / 2);
   width: min(
     calc(100vw - 20px),
     calc(var(--app-viewport-height) - 2 * var(--record-ring-top-boundary)),

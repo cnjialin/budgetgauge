@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/generate-build-stamp.mjs && vite build",
+    "android:sync": "npm run build && npx cap sync android",
     "preview": "vite preview"
   },
   "devDependencies": {

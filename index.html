@@ -18,47 +18,112 @@
       <span></span>
     </button>
     <header class="gauge-head">
-      <p class="gauge-kicker">Budget Cluster</p>
-      <p id="connectionStatus" class="connection-status">本地模式</p>
+      <div class="home-head-content">
+        <p class="gauge-kicker">Budget Cluster</p>
+        <p id="connectionStatus" class="connection-status">本地模式</p>
+      </div>
+      <div class="record-head-content" aria-label="记录消费输入">
+        <label class="record-amount-field">
+          <span class="record-amount-spacer" aria-hidden="true"></span>
+          <span class="record-amount-label">消费记录</span>
+          <span class="record-amount-prefix" aria-hidden="true">¥</span>
+          <input id="expenseAmountInput" type="number" min="0" step="0.01" placeholder="0.00">
+          <button id="clearExpenseAmountBtn" class="record-clear-btn" type="button" aria-label="清空金额">
+            <span aria-hidden="true"></span>
+          </button>
+        </label>
+        <label class="record-time-field">
+          <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+            <path d="M5.5 7.5h13v9.2h-8.2L6.8 19v-2.3H5.5Z"></path>
+            <path d="M8.5 10.5h7"></path>
+          </svg>
+          <span class="record-time-label">消费时间</span>
+          <button id="expenseDateTimeTrigger" class="expense-datetime-trigger" type="button">选择消费时间</button>
+        </label>
+        <label class="record-category-field">
+          <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+            <path d="M4.8 7.2h6v6h-6Z"></path>
+            <path d="M13.2 7.2h6v6h-6Z"></path>
+            <path d="M4.8 15.6h6"></path>
+            <path d="M13.2 15.6h6"></path>
+          </svg>
+          <span class="record-category-label">消费分类</span>
+          <input id="expensePurposeInput" type="text" maxlength="30" placeholder="选择或输入分类">
+        </label>
+      </div>
     </header>
 
     <section class="gauge-orb" aria-labelledby="gaugeTitle">
       <div class="gauge-stage">
-        <svg id="budgetGauge" class="budget-gauge" viewBox="0 0 420 420" aria-label="额度仪表盘" role="img">
-          <defs>
-            <linearGradient id="trackGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#19273f"></stop>
-              <stop offset="100%" stop-color="#0a1221"></stop>
-            </linearGradient>
-            <linearGradient id="valueGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="var(--gauge-value-start)"></stop>
-              <stop offset="55%" stop-color="var(--gauge-value-mid)"></stop>
-              <stop offset="100%" stop-color="var(--gauge-value-end)"></stop>
-            </linearGradient>
-            <linearGradient id="warningGradient" x1="100%" y1="0%" x2="0%" y2="0%">
-              <stop offset="0%" stop-color="#ffb36b"></stop>
-              <stop offset="58%" stop-color="#ff7d88"></stop>
-              <stop offset="82%" stop-color="#ff475f"></stop>
-              <stop offset="100%" stop-color="#ff243e"></stop>
-            </linearGradient>
-          </defs>
-          <path id="gaugeReferencePath" class="gauge-reference"></path>
-          <path id="gaugeValuePath" class="gauge-value"></path>
-          <g id="gaugeTicks" class="gauge-ticks"></g>
-          <line id="gaugeBudgetMarker" class="gauge-budget-marker"></line>
-        </svg>
+        <div class="home-gauge-content">
+          <svg id="budgetGauge" class="budget-gauge" viewBox="0 0 420 420" aria-label="额度仪表盘" role="img">
+            <defs>
+              <linearGradient id="trackGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#19273f"></stop>
+                <stop offset="100%" stop-color="#0a1221"></stop>
+              </linearGradient>
+              <linearGradient id="valueGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="var(--gauge-value-start)"></stop>
+                <stop offset="55%" stop-color="var(--gauge-value-mid)"></stop>
+                <stop offset="100%" stop-color="var(--gauge-value-end)"></stop>
+              </linearGradient>
+              <linearGradient id="warningGradient" x1="100%" y1="0%" x2="0%" y2="0%">
+                <stop offset="0%" stop-color="#ffb36b"></stop>
+                <stop offset="58%" stop-color="#ff7d88"></stop>
+                <stop offset="82%" stop-color="#ff475f"></stop>
+                <stop offset="100%" stop-color="#ff243e"></stop>
+              </linearGradient>
+            </defs>
+            <path id="gaugeReferencePath" class="gauge-reference"></path>
+            <path id="gaugeValuePath" class="gauge-value"></path>
+            <g id="gaugeTicks" class="gauge-ticks"></g>
+            <line id="gaugeBudgetMarker" class="gauge-budget-marker"></line>
+          </svg>
 
-        <div class="gauge-center" aria-live="polite">
-          <p class="center-label">当前剩余</p>
-          <strong id="remainingBudget">¥0.00</strong>
-          <span id="usageText">已使用 0%</span>
+          <div class="gauge-center" aria-live="polite">
+            <p class="center-label">当前剩余</p>
+            <strong id="remainingBudget">¥0.00</strong>
+            <span id="usageText">已使用 0%</span>
+          </div>
+        </div>
+
+        <div class="record-gauge-content" aria-label="选择消费分类">
+          <div id="purposeOptions" class="category-wheel" role="listbox" aria-label="消费分类">
+            <div id="categoryDividers" class="category-dividers" aria-hidden="true"></div>
+            <div id="categoryOptions" class="category-options"></div>
+            <button id="categoryBackBtn" class="category-wheel-center" type="button" aria-label="返回上一级分类">
+              <svg class="category-center-icon default" viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+                <path d="M6.5 7.2h11v8.2h-5L9 18.2v-2.8H6.5Z"></path>
+                <path d="M9 10h6"></path>
+                <path d="M9 12.6h4.5"></path>
+              </svg>
+              <svg class="category-center-icon back" viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+                <path d="M8.2 8.4H4.8V5"></path>
+                <path d="M5.2 8.1a7.2 7.2 0 1 1-1 5.8"></path>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </section>
 
-    <button id="openExpenseModalBtn" class="add-expense-btn" type="button" aria-haspopup="dialog" aria-controls="expenseModal" aria-label="记录一笔消费">
+    <button id="openExpenseModalBtn" class="add-expense-btn" type="button" aria-label="记录一笔消费">
       <span aria-hidden="true"></span>
     </button>
+    <div class="record-action-dock" aria-label="记录操作">
+      <button id="cancelExpenseBtn" class="expense-round-btn cancel" type="button" aria-label="取消">
+        <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+          <path d="M6.5 6.5 17.5 17.5"></path>
+          <path d="M17.5 6.5 6.5 17.5"></path>
+        </svg>
+      </button>
+      <button id="confirmExpenseBtn" class="expense-round-btn confirm" type="button" aria-label="记录">
+        <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+          <path d="M5.5 12.6 9.8 16.9 18.8 7.6"></path>
+        </svg>
+      </button>
+    </div>
+    <p id="expenseStatus" class="record-status" aria-live="polite"></p>
 
     <nav class="bottom-nav" aria-label="主导航">
       <button id="homeTabBtn" class="bottom-nav-btn active" type="button" aria-label="首页" aria-current="page">
@@ -85,78 +150,50 @@
     </nav>
   </main>
 
-  <div id="expenseModal" class="expense-modal" hidden>
-    <div id="expenseBackdrop" class="expense-backdrop"></div>
-    <section class="expense-card" role="dialog" aria-modal="true" aria-labelledby="expenseModalTitle">
-      <p class="expense-kicker">Quick Expense</p>
-      <h2 id="expenseModalTitle">记录一笔消费</h2>
-      <label class="expense-field">
-        <span>消费时间</span>
-        <button id="expenseDateTimeTrigger" class="expense-datetime-trigger" type="button">选择消费时间</button>
-      </label>
-      <label class="expense-field">
-        <span>消费金额</span>
-        <input id="expenseAmountInput" type="number" min="0" step="0.01" placeholder="例如 32.50">
-      </label>
-      <div class="expense-field">
-        <span>用途</span>
-        <div id="purposeOptions" class="purpose-options" role="listbox" aria-label="用途快捷选项">
-          <button class="purpose-chip" type="button" data-purpose="食">食</button>
-          <button class="purpose-chip" type="button" data-purpose="穿">穿</button>
-          <button class="purpose-chip" type="button" data-purpose="住">住</button>
-          <button class="purpose-chip" type="button" data-purpose="用">用</button>
-          <button class="purpose-chip" type="button" data-purpose="行">行</button>
-        </div>
-        <input id="expensePurposeInput" type="text" maxlength="30" placeholder="也可以自己输入用途">
-      </div>
-      <div class="expense-actions">
-        <button id="cancelExpenseBtn" class="expense-btn ghost" type="button">取消</button>
-        <button id="confirmExpenseBtn" class="expense-btn primary" type="button">确定</button>
-      </div>
-      <p id="expenseStatus" class="modal-status" aria-live="polite"></p>
-
-      <div id="dateTimePickerModal" class="datetime-picker-modal" hidden>
-        <div class="datetime-picker-card" role="dialog" aria-modal="true" aria-labelledby="dateTimePickerTitle">
-          <div class="datetime-picker-head android-picker-head">
-            <p id="pickerDisplayYear" class="picker-display-year">2026年</p>
-            <h3 id="pickerDisplayDate" class="picker-display-date">4月3日周五</h3>
-          </div>
-          <div class="datetime-picker-toolbar">
-            <button id="pickerPrevMonthBtn" class="calendar-nav-btn" type="button" aria-label="上一个月">‹</button>
-            <strong id="pickerMonthLabel" class="picker-month-label">2026年4月</strong>
-            <button id="pickerNextMonthBtn" class="calendar-nav-btn" type="button" aria-label="下一个月">›</button>
-          </div>
-          <div class="calendar-weekdays" aria-hidden="true">
-            <span>日</span>
-            <span>一</span>
-            <span>二</span>
-            <span>三</span>
-            <span>四</span>
-            <span>五</span>
-            <span>六</span>
-          </div>
-          <div id="pickerCalendarGrid" class="calendar-grid" role="grid" aria-labelledby="dateTimePickerTitle"></div>
-          <div class="datetime-picker-grid">
-            <div class="time-wheel-picker" aria-label="选择时间">
-              <div class="time-wheel-column">
-                <span>时</span>
-                <div class="time-wheel-shell">
-                  <div id="pickerHourWheel" class="time-wheel-list"></div>
+  <div id="dateTimePickerModal" class="datetime-picker-modal" hidden>
+        <div class="datetime-picker-card" role="dialog" aria-modal="true" aria-label="选择消费时间">
+          <div class="datetime-picker-panels">
+            <section class="datetime-date-panel" aria-label="选择日期">
+              <div class="datetime-picker-toolbar">
+                <button id="pickerPrevMonthBtn" class="calendar-nav-btn" type="button" aria-label="上一个月">‹</button>
+                <strong id="pickerMonthLabel" class="picker-month-label">2026年4月</strong>
+                <button id="pickerNextMonthBtn" class="calendar-nav-btn" type="button" aria-label="下一个月">›</button>
+              </div>
+              <div class="calendar-weekdays" aria-hidden="true">
+                <span>日</span>
+                <span>一</span>
+                <span>二</span>
+                <span>三</span>
+                <span>四</span>
+                <span>五</span>
+                <span>六</span>
+              </div>
+              <div id="pickerCalendarGrid" class="calendar-grid" role="grid" aria-label="选择日期"></div>
+            </section>
+            <section class="datetime-time-panel" aria-label="选择时间">
+              <div class="datetime-picker-grid">
+                <div class="time-wheel-picker" aria-label="选择时间">
+                  <div class="time-wheel-column">
+                    <span>时</span>
+                    <div class="time-wheel-shell">
+                      <div id="pickerHourWheel" class="time-wheel-list"></div>
+                    </div>
+                  </div>
+                  <div class="time-wheel-column">
+                    <span>分</span>
+                    <div class="time-wheel-shell">
+                      <div id="pickerMinuteWheel" class="time-wheel-list"></div>
+                    </div>
+                  </div>
+                  <div class="time-wheel-column">
+                    <span>秒</span>
+                    <div class="time-wheel-shell">
+                      <div id="pickerSecondWheel" class="time-wheel-list"></div>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="time-wheel-column">
-                <span>分</span>
-                <div class="time-wheel-shell">
-                  <div id="pickerMinuteWheel" class="time-wheel-list"></div>
-                </div>
-              </div>
-              <div class="time-wheel-column">
-                <span>秒</span>
-                <div class="time-wheel-shell">
-                  <div id="pickerSecondWheel" class="time-wheel-list"></div>
-                </div>
-              </div>
-            </div>
+            </section>
           </div>
           <div class="datetime-picker-actions">
             <button id="dateTimeNowBtn" class="expense-btn ghost" type="button">现在</button>
@@ -164,8 +201,6 @@
             <button id="dateTimeConfirmBtn" class="expense-btn primary" type="button">确定</button>
           </div>
         </div>
-      </div>
-    </section>
   </div>
 
   <div id="settingsModal" class="settings-modal" hidden>
@@ -173,32 +208,34 @@
     <section class="settings-card" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
       <p class="expense-kicker">Preferences</p>
       <h2 id="settingsModalTitle">账户设置</h2>
-      <label class="expense-field settings-auth-field settings-connection-field">
-        <span>Supabase URL</span>
-        <input id="supabaseUrlInput" type="url" maxlength="200" placeholder="输入你的 Supabase 项目 URL">
-      </label>
-      <label class="expense-field settings-auth-field settings-connection-field">
-        <span>Supabase Key</span>
-        <input id="supabaseKeyInput" type="text" maxlength="300" placeholder="输入你的 publishable / anon key">
-      </label>
-      <label class="expense-field settings-auth-field settings-connection-field">
-        <span>邮箱</span>
-        <input id="emailInput" type="email" maxlength="60" placeholder="输入你的 Supabase 邮箱">
-      </label>
-      <label class="expense-field settings-auth-field settings-connection-field">
-        <span>密码</span>
-        <input id="passwordInput" type="password" maxlength="32" placeholder="输入你的密码">
-      </label>
-      <label class="expense-field settings-budget-field">
-        <span>每月总额度</span>
-        <input id="monthlyBudgetInput" type="number" min="0" step="100" placeholder="例如 5000">
-      </label>
-      <div class="expense-actions settings-actions">
-          <button id="logoutSettingsBtn" class="expense-btn ghost settings-auth-action" type="button">登出</button>
-        <button id="cancelSettingsBtn" class="expense-btn ghost" type="button">取消</button>
-        <button id="saveSettingsBtn" class="expense-btn primary" type="button">保存</button>
+      <div class="settings-scroll-body">
+        <label class="expense-field settings-auth-field settings-connection-field">
+          <span>Supabase URL</span>
+          <input id="supabaseUrlInput" type="url" maxlength="200" placeholder="输入你的 Supabase 项目 URL">
+        </label>
+        <label class="expense-field settings-auth-field settings-connection-field">
+          <span>Supabase Key</span>
+          <input id="supabaseKeyInput" type="text" maxlength="300" placeholder="输入你的 publishable / anon key">
+        </label>
+        <label class="expense-field settings-auth-field settings-connection-field">
+          <span>邮箱</span>
+          <input id="emailInput" type="email" maxlength="60" placeholder="输入你的 Supabase 邮箱">
+        </label>
+        <label class="expense-field settings-auth-field settings-connection-field">
+          <span>密码</span>
+          <input id="passwordInput" type="password" maxlength="32" placeholder="输入你的密码">
+        </label>
+        <label class="expense-field settings-budget-field">
+          <span>每月总额度</span>
+          <input id="monthlyBudgetInput" type="number" min="0" step="100" placeholder="例如 5000">
+        </label>
+        <div class="expense-actions settings-actions">
+            <button id="logoutSettingsBtn" class="expense-btn ghost settings-auth-action" type="button">登出</button>
+          <button id="cancelSettingsBtn" class="expense-btn ghost" type="button">取消</button>
+          <button id="saveSettingsBtn" class="expense-btn primary" type="button">保存</button>
+        </div>
+        <p id="settingsStatus" class="modal-status" aria-live="polite"></p>
       </div>
-      <p id="settingsStatus" class="modal-status" aria-live="polite"></p>
     </section>
   </div>
 
@@ -230,8 +267,24 @@
   <div id="releaseInfoModal" class="settings-modal" hidden>
     <div id="releaseInfoBackdrop" class="expense-backdrop"></div>
     <section class="settings-card release-info-card" role="dialog" aria-modal="true" aria-labelledby="releaseInfoTitle">
-      <p class="expense-kicker">Menu</p>
-      <h2 id="releaseInfoTitle">菜单</h2>
+      <p class="expense-kicker">Preferences</p>
+      <h2 id="releaseInfoTitle">设置</h2>
+      <div class="settings-scroll-body">
+        <div class="category-settings-panel" aria-labelledby="categorySettingsTitle">
+          <div class="category-settings-head">
+            <h3 id="categorySettingsTitle">分类设置</h3>
+            <button id="syncCategoriesBtn" class="category-settings-sync" type="button" aria-label="同步云端分类" title="同步云端分类">
+              <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+                <path d="M8.2 8.4H4.8V5"></path>
+                <path d="M5.2 8.1a7.2 7.2 0 0 1 12-1.8"></path>
+                <path d="M15.8 15.6h3.4V19"></path>
+                <path d="M18.8 15.9a7.2 7.2 0 0 1-12 1.8"></path>
+              </svg>
+            </button>
+          </div>
+          <div id="categorySettingsTree" class="category-settings-tree" aria-label="自定义分类"></div>
+          <button id="addRootCategoryBtn" class="category-settings-add root" type="button" aria-label="添加一级分类">+</button>
+        </div>
         <div class="theme-panel" aria-labelledby="themePanelTitle">
           <h3 id="themePanelTitle">外观配色</h3>
           <div class="theme-options" role="radiogroup" aria-label="外观配色">
@@ -261,6 +314,7 @@
         <div class="expense-actions release-info-actions">
           <button id="closeReleaseInfoBtn" class="expense-btn ghost" type="button">关闭</button>
         </div>
+      </div>
       </section>
   </div>
 

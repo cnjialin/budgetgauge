@@ -18,6 +18,7 @@ const HISTORY_KEY = "budget-gauge-history";
 const CLOUD_HISTORY_KEY = "budget-gauge-cloud-history";
 const RELEASE_INFO_CACHE_KEY = "budget-gauge-release-info";
 const THEME_KEY = "budget-gauge-theme";
+const CUSTOM_CATEGORIES_KEY = "budget-gauge-categories";
 const THEMES = new Set(["default", "forest"]);
 
 const supabaseUrlInput = document.querySelector("#supabaseUrlInput");
@@ -29,6 +30,7 @@ const homeTabBtn = document.querySelector("#homeTabBtn");
 const openHistoryBtn = document.querySelector("#openHistoryBtn");
 const openSettingsBtn = document.querySelector("#openSettingsBtn");
 const bottomSettingsBtn = document.querySelector("#bottomSettingsBtn");
+const clearExpenseAmountBtn = document.querySelector("#clearExpenseAmountBtn");
 const connectionStatusEl = document.querySelector("#connectionStatus");
 const centerLabelEl = document.querySelector(".center-label");
 const remainingBudgetEl = document.querySelector("#remainingBudget");
@@ -37,12 +39,14 @@ const gaugeReferencePath = document.querySelector("#gaugeReferencePath");
 const gaugeValuePath = document.querySelector("#gaugeValuePath");
 const gaugeTicks = document.querySelector("#gaugeTicks");
 const gaugeBudgetMarker = document.querySelector("#gaugeBudgetMarker");
-const expenseModal = document.querySelector("#expenseModal");
-const expenseBackdrop = document.querySelector("#expenseBackdrop");
 const expenseDateTimeTrigger = document.querySelector("#expenseDateTimeTrigger");
 const expenseAmountInput = document.querySelector("#expenseAmountInput");
 const expensePurposeInput = document.querySelector("#expensePurposeInput");
-const purposeOptions = [...document.querySelectorAll(".purpose-chip")];
+const purposeWheel = document.querySelector("#purposeOptions");
+const categoryOptions = document.querySelector("#categoryOptions");
+const categoryDividers = document.querySelector("#categoryDividers");
+const categoryBackBtn = document.querySelector("#categoryBackBtn");
+let purposeOptions = [];
 const expenseStatus = document.querySelector("#expenseStatus");
 const cancelExpenseBtn = document.querySelector("#cancelExpenseBtn");
 const confirmExpenseBtn = document.querySelector("#confirmExpenseBtn");
@@ -90,6 +94,9 @@ const releaseDownloadChoices = document.querySelector("#releaseDownloadChoices")
 const releaseGithubLink = document.querySelector("#releaseGithubLink");
 const releaseBaiduLink = document.querySelector("#releaseBaiduLink");
 const themeButtons = [...document.querySelectorAll(".theme-option")];
+const categorySettingsTree = document.querySelector("#categorySettingsTree");
+const addRootCategoryBtn = document.querySelector("#addRootCategoryBtn");
+const syncCategoriesBtn = document.querySelector("#syncCategoriesBtn");
 
 let supabaseUrl = loadText(SUPABASE_URL_KEY) || DEFAULT_SUPABASE_URL;
 let supabaseKey = loadText(SUPABASE_KEY_KEY) || DEFAULT_SUPABASE_KEY;
@@ -97,6 +104,7 @@ let monthlyBudgetLimit = loadNumber(MONTHLY_BUDGET_KEY, 5000);
 let email = loadText(EMAIL_KEY);
 let password = loadText(PASSWORD_KEY);
 let selectedTheme = normalizeTheme(loadText(THEME_KEY));
+let expenseCategories = [];
 let expenseHistory = loadHistory();
 let historyRange = "today";
 let monthHistorySummaryCache = null;
@@ -111,6 +119,11 @@ let historySwipeStartY = 0;
 let historySwipeCurrentDeltaX = 0;
 let isHistorySwipeActive = false;
 let selectedPurpose = "";
+let selectedCategoryPath = [];
+let currentCategoryNodes = [];
+let currentCategoryPath = [];
+let currentCategoryDepth = 0;
+let categorySettingsOpenKeys = new Set();
 let currentSession = null;
 let displayedRemaining = null;
 let remainingAnimationFrame = 0;
@@ -120,11 +133,15 @@ let shouldReplayGaugeAnimationOnVisible = false;
 let supabase = createSupabaseClient(supabaseUrl, supabaseKey);
 let isBudgetOnlySettingsMode = false;
 let activeMainView = "home";
+let isExpenseMode = false;
+let editingExpenseRecord = null;
 let pageTransitionTimer = 0;
 let latestReleaseInfo = null;
 let lastTouchY = 0;
 let viewportMetricsFrame = 0;
 let focusedEditable = null;
+let stableViewportWidth = 0;
+let stableViewportHeight = 0;
 let selectedExpenseDateTime = new Date();
 let pickerDraftDateTime = new Date();
 const timeWheelScrollTimers = new Map();
@@ -133,6 +150,144 @@ const GAUGE_CY = 210;
 const GAUGE_RADIUS = 154;
 const GAUGE_START_ANGLE = -135;
 const GAUGE_END_ANGLE = 135;
+const CATEGORY_ICON_PATHS = {
+  food: `
+    <path d="M8 9.5h8v2.2a4 4 0 0 1-8 0Z"></path>
+    <path d="M6.5 9.5h11"></path>
+    <path d="M9 6.8c.8-.7.8-1.3 0-2"></path>
+    <path d="M12 6.8c.8-.7.8-1.3 0-2"></path>
+    <path d="M15 6.8c.8-.7.8-1.3 0-2"></path>
+    <path d="M10 16h4"></path>
+  `,
+  transport: `
+    <path d="M6.5 15.5h11V9.3c0-1.2-.9-2.2-2.1-2.4A20 20 0 0 0 12 6.6c-1.2 0-2.4.1-3.4.3-1.2.2-2.1 1.2-2.1 2.4Z"></path>
+    <path d="M8 15.5 6.8 18"></path>
+    <path d="M16 15.5l1.2 2.5"></path>
+    <path d="M8.4 10h7.2"></path>
+    <circle cx="9" cy="13.1" r=".8"></circle>
+    <circle cx="15" cy="13.1" r=".8"></circle>
+  `,
+  shopping: `
+    <path d="M7.2 9.2h9.6l.8 9.1H6.4Z"></path>
+    <path d="M9.2 9.2a2.8 2.8 0 0 1 5.6 0"></path>
+    <path d="M9.2 12v.1"></path>
+    <path d="M14.8 12v.1"></path>
+  `,
+  home: `
+    <path d="M5.5 11.2 12 5.7l6.5 5.5"></path>
+    <path d="M7.2 10.5v7.2h9.6v-7.2"></path>
+    <path d="M10.5 17.7v-4h3v4"></path>
+  `,
+  fun: `
+    <circle cx="12" cy="12" r="5.8"></circle>
+    <circle cx="9.5" cy="10" r=".7"></circle>
+    <circle cx="14.5" cy="10" r=".7"></circle>
+    <circle cx="10" cy="14.1" r=".7"></circle>
+    <circle cx="14" cy="14.1" r=".7"></circle>
+    <circle cx="12" cy="12" r=".7"></circle>
+  `,
+  health: `
+    <path d="M12 5.8c1.9-2 5.3-.8 5.3 2.2 0 3.4-5.3 7.3-5.3 7.3S6.7 11.4 6.7 8c0-3 3.4-4.2 5.3-2.2Z"></path>
+    <path d="M12 8.1v5"></path>
+    <path d="M9.5 10.6h5"></path>
+    <path d="M8.2 18.2h7.6"></path>
+  `,
+  other: `
+    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+    <circle cx="15.5" cy="8.5" r="1.5"></circle>
+    <circle cx="8.5" cy="15.5" r="1.5"></circle>
+    <circle cx="15.5" cy="15.5" r="1.5"></circle>
+  `,
+};
+const EXPENSE_CATEGORIES = [
+  {
+    id: "food",
+    label: "餐饮",
+    icon: "food",
+    children: [
+      { id: "breakfast", label: "早餐", icon: "food" },
+      { id: "lunch", label: "午餐", icon: "food", children: [
+        { id: "lunch-hotpot", label: "火锅", icon: "food" },
+        { id: "lunch-barbeque", label: "烤肉", icon: "food" },
+        { id: "lunch-stir-fry", label: "炒菜", icon: "food" },
+        { id: "lunch-snack", label: "小吃", icon: "food" },
+      ] },
+      { id: "dinner", label: "晚餐", icon: "food", children: [
+        { id: "dinner-hotpot", label: "火锅", icon: "food" },
+        { id: "dinner-barbeque", label: "烤肉", icon: "food" },
+        { id: "dinner-stir-fry", label: "炒菜", icon: "food" },
+        { id: "dinner-snack", label: "小吃", icon: "food" },
+      ] },
+      { id: "snack", label: "零食", icon: "food" },
+    ],
+  },
+  {
+    id: "transport",
+    label: "交通",
+    icon: "transport",
+    children: [
+      { id: "bus", label: "公交", icon: "transport" },
+      { id: "subway", label: "地铁", icon: "transport" },
+      { id: "taxi", label: "打车", icon: "transport" },
+      { id: "train", label: "火车", icon: "transport" },
+      { id: "flight", label: "机票", icon: "transport" },
+      { id: "transport-other", label: "其他", icon: "other" },
+    ],
+  },
+  {
+    id: "shopping",
+    label: "购物",
+    icon: "shopping",
+    children: [
+      { id: "daily", label: "日用品", icon: "shopping" },
+      { id: "clothes", label: "衣物", icon: "shopping" },
+      { id: "digital", label: "数码", icon: "shopping" },
+      { id: "skincare", label: "护肤", icon: "shopping" },
+      { id: "appliance", label: "家电", icon: "shopping" },
+      { id: "shopping-other", label: "其他", icon: "other" },
+    ],
+  },
+  {
+    id: "home",
+    label: "住房",
+    icon: "home",
+    children: [
+      { id: "rent", label: "房租", icon: "home" },
+      { id: "utilities", label: "水电", icon: "home" },
+      { id: "property", label: "物业", icon: "home" },
+      { id: "repair", label: "维修", icon: "home" },
+      { id: "furniture", label: "家具", icon: "home" },
+      { id: "home-other", label: "其他", icon: "other" },
+    ],
+  },
+  {
+    id: "fun",
+    label: "娱乐",
+    icon: "fun",
+    children: [
+      { id: "movie", label: "电影", icon: "fun" },
+      { id: "game", label: "游戏", icon: "fun" },
+      { id: "membership", label: "会员", icon: "fun" },
+      { id: "sport", label: "运动", icon: "fun" },
+      { id: "travel", label: "旅行", icon: "fun" },
+      { id: "fun-other", label: "其他", icon: "other" },
+    ],
+  },
+  {
+    id: "health",
+    label: "健康",
+    icon: "health",
+    children: [
+      { id: "medical", label: "医疗", icon: "health" },
+      { id: "fitness", label: "健身", icon: "health" },
+      { id: "health-other", label: "其他", icon: "other" },
+    ],
+  },
+];
+const CATEGORY_START_ANGLE = -90;
+const CATEGORY_BUTTON_RADIUS = 31;
+
+expenseCategories = loadExpenseCategories();
 
 initialize();
 
@@ -141,6 +296,7 @@ async function initialize() {
   applyTheme(selectedTheme);
   applyReleaseBadgeState(null);
   setupGauge();
+  resetCategoryState();
   setHistoryRange(historyRange, false);
   setActiveMainView("home");
   setGaugeMode(false);
@@ -150,14 +306,16 @@ async function initialize() {
   playInitialGaugeAnimation();
 
   openExpenseModalBtn.addEventListener("click", handleGaugeCenterClick);
+  remainingBudgetEl.addEventListener("click", handleGaugeCenterClick);
   homeTabBtn.addEventListener("click", openHomeView);
   openHistoryBtn.addEventListener("click", openHistoryModal);
   openSettingsBtn.addEventListener("click", toggleReleaseInfoFromTopMenu);
   bottomSettingsBtn.addEventListener("click", () => openSettingsModal());
   connectionStatusEl.addEventListener("click", openConnectionSettingsModal);
+  clearExpenseAmountBtn.addEventListener("click", clearExpenseAmount);
   cancelExpenseBtn.addEventListener("click", closeExpenseModal);
   confirmExpenseBtn.addEventListener("click", confirmExpense);
-  expenseBackdrop.addEventListener("click", closeExpenseModal);
+  categoryBackBtn.addEventListener("click", stepCategoryBack);
   cancelSettingsBtn.addEventListener("click", closeSettingsModal);
   logoutSettingsBtn.addEventListener("click", signOutToLocalMode);
   saveSettingsBtn.addEventListener("click", saveSettings);
@@ -171,15 +329,18 @@ async function initialize() {
   historyCard.addEventListener("touchend", handleHistorySwipeEnd, { passive: true });
   historyCard.addEventListener("touchcancel", handleHistorySwipeCancel, { passive: true });
   themeButtons.forEach((button) => button.addEventListener("click", () => setTheme(button.dataset.themeValue)));
+  addRootCategoryBtn?.addEventListener("click", () => promptAddCategory([]));
+  syncCategoriesBtn?.addEventListener("click", syncCategoriesFromMenu);
+  categorySettingsTree?.addEventListener("click", handleCategorySettingsClick);
   closeReleaseInfoBtn.addEventListener("click", closeReleaseInfoModal);
   releaseInfoBackdrop.addEventListener("click", closeReleaseInfoModal);
   expenseDateTimeTrigger.addEventListener("click", openDateTimePicker);
   expenseAmountInput.addEventListener("keydown", handleExpenseInputKeydown);
   expensePurposeInput.addEventListener("keydown", handleExpenseInputKeydown);
   expensePurposeInput.addEventListener("input", syncPurposeSelection);
-  purposeOptions.forEach((button) => button.addEventListener("click", () => selectPurpose(button.dataset.purpose)));
   pickerPrevMonthBtn.addEventListener("click", () => stepDateTimePicker("month", -1));
   pickerNextMonthBtn.addEventListener("click", () => stepDateTimePicker("month", 1));
+  dateTimePickerModal.addEventListener("click", handleDateTimePickerBackdropClick);
   dateTimeNowBtn.addEventListener("click", setPickerToNow);
   dateTimeCancelBtn.addEventListener("click", closeDateTimePicker);
   dateTimeConfirmBtn.addEventListener("click", confirmDateTimePicker);
@@ -216,14 +377,28 @@ function syncViewportMetrics() {
   viewportMetricsFrame = requestAnimationFrame(() => {
     viewportMetricsFrame = 0;
     const viewport = window.visualViewport;
+    const viewportWidth = Math.round(viewport?.width || window.innerWidth || document.documentElement.clientWidth);
     const viewportHeight = Math.max(320, Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight));
     const layoutHeight = Math.round(window.innerHeight || viewportHeight);
     const viewportTop = Math.round(viewport?.offsetTop || 0);
-    const keyboardInset = Math.max(0, layoutHeight - viewportHeight - viewportTop);
+    const rawKeyboardInset = Math.max(0, layoutHeight - viewportHeight - viewportTop);
+    const hasEditableFocus = Boolean(focusedEditable);
+    const viewportWidthChanged = Math.abs(viewportWidth - stableViewportWidth) > 80;
 
-    document.documentElement.style.setProperty("--app-viewport-height", `${viewportHeight}px`);
+    if (!stableViewportHeight || viewportWidthChanged || !hasEditableFocus) {
+      stableViewportWidth = viewportWidth;
+      stableViewportHeight = Math.max(320, layoutHeight, viewportHeight);
+    }
+
+    const lockedKeyboardInset = hasEditableFocus
+      ? Math.max(0, stableViewportHeight - viewportHeight - viewportTop)
+      : 0;
+    const keyboardInset = Math.max(rawKeyboardInset, lockedKeyboardInset);
+    const isKeyboardOpen = keyboardInset > 80;
+
+    document.documentElement.style.setProperty("--app-viewport-height", `${stableViewportHeight}px`);
     document.documentElement.style.setProperty("--keyboard-inset", `${keyboardInset}px`);
-    document.body.classList.toggle("keyboard-open", keyboardInset > 80);
+    document.body.classList.toggle("keyboard-open", isKeyboardOpen);
 
     if (focusedEditable) {
       requestAnimationFrame(() => scrollFocusedControlIntoView(focusedEditable));
@@ -237,6 +412,15 @@ function handleEditableFocusIn(event) {
   }
 
   focusedEditable = event.target;
+  stableViewportWidth = Math.round(window.visualViewport?.width || window.innerWidth || document.documentElement.clientWidth);
+  stableViewportHeight = Math.max(
+    stableViewportHeight,
+    320,
+    Math.round(window.innerHeight || 0),
+    Math.round(window.visualViewport?.height || 0),
+    Math.round(document.documentElement.clientHeight || 0),
+  );
+  document.documentElement.style.setProperty("--app-viewport-height", `${stableViewportHeight}px`);
   syncViewportMetrics();
   window.setTimeout(() => scrollFocusedControlIntoView(focusedEditable), 80);
   window.setTimeout(() => scrollFocusedControlIntoView(focusedEditable), 300);
@@ -275,14 +459,26 @@ function isKeyboardEditable(target) {
   return !["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"].includes(target.type);
 }
 
+function isRecordHeaderEditable(target) {
+  return Boolean(
+    target
+      && document.body.dataset.mode === "record"
+      && target instanceof HTMLElement
+      && target.closest(".record-head-content"),
+  );
+}
+
 function scrollFocusedControlIntoView(control) {
   if (!control || !document.contains(control)) {
     return;
   }
 
+  if (isRecordHeaderEditable(control)) {
+    return;
+  }
+
   const scrollable = control.closest(".settings-card, .expense-card");
   if (!scrollable) {
-    control.scrollIntoView({ block: "center", inline: "nearest" });
     return;
   }
 
@@ -303,24 +499,42 @@ function scrollFocusedControlIntoView(control) {
   }
 }
 
-function openExpenseModal() {
-  expenseModal.hidden = false;
-  const now = new Date();
-  selectedExpenseDateTime = now;
+function openExpenseModal(options = {}) {
+  const editRecord = options.editRecord || null;
+  hidePageView(settingsModal);
+  hidePageView(historyModal);
+  hidePageView(releaseInfoModal);
+  setActiveMainView("home");
+  isExpenseMode = true;
+  editingExpenseRecord = editRecord;
+  document.body.dataset.mode = "record";
+  const editDate = editRecord ? new Date(editRecord.time || "") : null;
+  selectedExpenseDateTime = editDate && !Number.isNaN(editDate.getTime()) ? editDate : new Date();
   syncDateTimeTriggerLabel();
   closeDateTimePicker();
-  expenseAmountInput.value = "";
-  expensePurposeInput.value = "";
-  expenseStatus.textContent = currentSession ? "" : "当前未连接 Supabase，保存将只写入本地历史";
-  selectedPurpose = "";
-  updatePurposeChips();
-  expenseAmountInput.focus();
+  expenseAmountInput.value = editRecord ? formatOptionalNumberInput(Number(editRecord.amount || 0)) : "";
+  expensePurposeInput.value = editRecord ? formatCategoryPathInput(getRecordPurposeList(editRecord)) : "";
+  expenseStatus.textContent = editRecord
+    ? "正在修改这笔消费"
+    : currentSession ? "" : "当前未连接 Supabase，保存将只写入本地历史";
+  resetCategoryState();
 }
 
-function closeExpenseModal() {
+function closeExpenseModal(options = {}) {
   closeDateTimePicker();
-  expenseModal.hidden = true;
-  openExpenseModalBtn.focus();
+  isExpenseMode = false;
+  editingExpenseRecord = null;
+  if (document.body.dataset.mode === "record") {
+    delete document.body.dataset.mode;
+  }
+  if (options.focus !== false) {
+    openExpenseModalBtn.focus();
+  }
+}
+
+function clearExpenseAmount() {
+  expenseAmountInput.value = "";
+  expenseAmountInput.focus();
 }
 
 function handleGaugeCenterClick(event) {
@@ -357,6 +571,10 @@ function setTheme(theme) {
 }
 
 function setActiveMainView(nextView) {
+  if (nextView !== "home" && isExpenseMode) {
+    closeExpenseModal({ focus: false });
+  }
+
   activeMainView = nextView;
   document.body.dataset.view = nextView;
   homeTabBtn.classList.toggle("active", nextView === "home");
@@ -454,11 +672,8 @@ function openSettingsModal(mode = "full", options = {}) {
       : currentSession ? "已连接 Supabase" : "默认使用本地模式，如需同步可在这里登录";
 
   if (isBudgetOnlySettingsMode) {
-    monthlyBudgetInput.focus();
     return;
   }
-
-  supabaseUrlInput.focus();
 }
 
 function openBudgetSettingsFromGauge() {
@@ -579,6 +794,7 @@ function handleHistorySwipeCancel() {
 
 function openReleaseInfoModal(options = {}) {
   currentVersionValue.textContent = APP_RELEASE_TAG;
+  renderCategorySettings();
 
   if (latestReleaseInfo?.downloadUrl) {
     releaseInfoStatus.innerHTML = `发现新版本 <strong>${escapeHtml(latestReleaseInfo.tag)}</strong>，前往更新`;
@@ -622,6 +838,16 @@ async function confirmExpense() {
   if (amount <= 0) {
     expenseAmountInput.focus();
     expenseStatus.textContent = "请输入大于 0 的消费金额。";
+    return;
+  }
+
+  if (editingExpenseRecord) {
+    await updateExpenseRecord(editingExpenseRecord, {
+      amount,
+      purpose: purposeList.join(" "),
+      category: purposeList.length ? purposeList : null,
+      time: timestamp,
+    });
     return;
   }
 
@@ -716,9 +942,12 @@ async function saveSettings() {
   const signedIn = shouldAttemptSignIn ? await signIn(email, password, true) : Boolean(currentSession);
 
   if (signedIn) {
+    await refreshExpenseCategories();
     await refreshExpenses();
     settingsStatus.textContent = shouldAttemptSignIn ? "保存并登录成功" : "设置已保存，当前保持已登录";
   } else {
+    expenseCategories = loadExpenseCategories();
+    resetCategoryState();
     renderGauge();
     settingsStatus.textContent = shouldAttemptSignIn ? "设置已保存，但 Supabase 登录失败" : "已保存到本地，当前为本地模式";
   }
@@ -740,6 +969,9 @@ async function signOutToLocalMode() {
 
   currentSession = null;
   passwordInput.value = "";
+  expenseCategories = loadExpenseCategories();
+  resetCategoryState();
+  renderCategorySettings();
   expenseHistory = loadHistory();
   scheduleMonthHistorySummaryForCurrentData();
   updateConnectionStatus();
@@ -758,6 +990,8 @@ async function signOutToLocalMode() {
 async function hydrateSupabaseState() {
   if (!supabase) {
     currentSession = null;
+    expenseCategories = loadExpenseCategories();
+    resetCategoryState();
     expenseHistory = loadHistory();
     scheduleMonthHistorySummaryForCurrentData();
     updateConnectionStatus();
@@ -778,14 +1012,19 @@ async function hydrateSupabaseState() {
     disableDataScopeButton();
 
       if (currentSession) {
+        await refreshExpenseCategories();
         await refreshExpenses("month", { animate: true, fromFull: false });
         return;
       }
 
+      expenseCategories = loadExpenseCategories();
+      resetCategoryState();
       expenseHistory = loadHistory();
       scheduleMonthHistorySummaryForCurrentData();
     } catch {
       currentSession = null;
+      expenseCategories = loadExpenseCategories();
+      resetCategoryState();
       expenseHistory = loadHistory();
       scheduleMonthHistorySummaryForCurrentData();
       updateConnectionStatus();
@@ -1018,21 +1257,1007 @@ function applyHistoryPagerPosition(animate = true, dragOffset = 0) {
   historyFilter?.style.setProperty("--history-tab-progress", String(progress));
 }
 
-function selectPurpose(purpose) {
-  selectedPurpose = purpose;
-  expensePurposeInput.value = purpose;
+function renderCategoryWheel(categories = expenseCategories, options = {}) {
+  if (!purposeWheel || !categoryOptions || !categoryDividers) {
+    return;
+  }
+
+  const shouldAnimate = Boolean(options.animate);
+  const normalizedCategories = categories.filter((category) => category?.label);
+  const count = normalizedCategories.length;
+  currentCategoryNodes = normalizedCategories;
+  currentCategoryDepth = currentCategoryPath.length;
+  categoryOptions.classList.remove("is-entering");
+  categoryDividers.classList.remove("is-entering");
+  categoryOptions.innerHTML = "";
+  categoryDividers.innerHTML = "";
+  purposeOptions = [];
+
+  if (!count) {
+    purposeWheel.style.background = "transparent";
+    purposeWheel.dataset.activePurpose = "";
+    return;
+  }
+
+  const step = 360 / count;
+  const offset = CATEGORY_START_ANGLE + 90 - step / 2;
+  purposeWheel.style.setProperty("--category-step", `${step}deg`);
+  purposeWheel.style.setProperty("--category-highlight-start", `${offset}deg`);
+
+  normalizedCategories.forEach((category, index) => {
+    const centerAngle = CATEGORY_START_ANGLE + step * index;
+    const position = getCategoryPosition(centerAngle, CATEGORY_BUTTON_RADIUS);
+    const button = document.createElement("button");
+    button.className = "category-segment purpose-chip";
+    button.classList.toggle("text-only", currentCategoryDepth > 0);
+    button.type = "button";
+    button.dataset.purpose = category.label;
+    button.dataset.categoryIndex = String(index);
+    button.setAttribute("aria-label", category.label);
+    button.style.left = `${position.x}%`;
+    button.style.top = `${position.y}%`;
+    button.style.setProperty("--category-enter-index", String(index));
+    button.innerHTML = getCategoryButtonMarkup(category);
+    button.addEventListener("click", () => selectCategoryNode(category, index));
+    button.addEventListener("pointerenter", () => previewPurpose(category.label));
+    button.addEventListener("pointerleave", resetPurposePreview);
+    button.addEventListener("focus", () => previewPurpose(category.label));
+    button.addEventListener("blur", resetPurposePreview);
+    categoryOptions.appendChild(button);
+    purposeOptions.push(button);
+
+    const divider = document.createElement("span");
+    divider.className = "category-divider";
+    divider.style.transform = `rotate(${CATEGORY_START_ANGLE + step * (index + 0.5) - 90}deg)`;
+    divider.style.setProperty("--category-enter-index", String(index));
+    categoryDividers.appendChild(divider);
+  });
+
+  updatePurposeChips();
+  updateCategoryBackState();
+
+  if (shouldAnimate) {
+    playCategoryWheelTransition();
+  }
+}
+
+async function updateExpenseRecord(record, nextRecord) {
+  const previousRecord = { ...record };
+  Object.assign(record, nextRecord);
+  scheduleMonthHistorySummaryForCurrentData();
+
+  if (!currentSession) {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(expenseHistory));
+  }
+
+  renderGauge();
+  renderHistory();
+  expenseStatus.textContent = "";
+  closeExpenseModal();
+
+  if (!currentSession) {
+    return;
+  }
+
+  const saved = await updateExpenseInSupabase(record, {
+    amount: nextRecord.amount,
+    type: "expense",
+    category: nextRecord.category,
+    time: nextRecord.time,
+  });
+
+  if (saved) {
+    await refreshExpenses();
+    return;
+  }
+
+  Object.assign(record, previousRecord);
+  scheduleMonthHistorySummaryForCurrentData();
+  renderGauge();
+  renderHistory();
+}
+
+function playCategoryWheelTransition() {
+  categoryOptions.classList.remove("is-entering");
+  categoryDividers.classList.remove("is-entering");
+  categoryOptions.getBoundingClientRect();
+  categoryOptions.classList.add("is-entering");
+  categoryDividers.classList.add("is-entering");
+
+  window.setTimeout(() => {
+    categoryOptions.classList.remove("is-entering");
+    categoryDividers.classList.remove("is-entering");
+  }, 360);
+}
+
+function renderCategorySettings() {
+  if (!categorySettingsTree) {
+    return;
+  }
+
+  captureCategorySettingsOpenState();
+  categorySettingsTree.innerHTML = "";
+
+  if (!expenseCategories.length) {
+    const empty = document.createElement("p");
+    empty.className = "category-settings-empty";
+    empty.textContent = "还没有分类";
+    categorySettingsTree.appendChild(empty);
+    return;
+  }
+
+  categorySettingsTree.appendChild(createCategorySettingsList(expenseCategories, []));
+}
+
+function createCategorySettingsList(categories, path) {
+  const list = document.createElement("div");
+  list.className = "category-settings-list";
+  list.dataset.depth = String(path.length);
+
+  categories.forEach((category, index) => {
+    const nodePath = [...path, index];
+    const item = document.createElement("div");
+    item.className = "category-settings-item";
+
+    if (path.length < 2) {
+      const details = document.createElement("details");
+      details.className = "category-settings-details";
+      const openKey = getCategorySettingsOpenKey(category, nodePath);
+      details.dataset.openKey = openKey;
+      details.open = categorySettingsOpenKeys.has(openKey);
+      const summary = document.createElement("summary");
+      summary.className = "category-settings-row";
+      summary.append(
+        createCategorySettingsName(category),
+        createCategoryDeleteButton(nodePath, category.label),
+      );
+      details.appendChild(summary);
+
+      const children = Array.isArray(category.children) ? category.children : [];
+      const childrenWrap = document.createElement("div");
+      childrenWrap.className = "category-settings-children";
+      const childrenInner = document.createElement("div");
+      childrenInner.className = "category-settings-children-inner";
+      if (children.length) {
+        childrenInner.appendChild(createCategorySettingsList(children, nodePath));
+      } else {
+        const empty = document.createElement("p");
+        empty.className = "category-settings-empty";
+        empty.textContent = "这一层还没有下级分类";
+        childrenInner.appendChild(empty);
+      }
+      childrenInner.appendChild(createCategoryAddButton(nodePath));
+      childrenWrap.appendChild(childrenInner);
+      details.appendChild(childrenWrap);
+      item.appendChild(details);
+    } else {
+      const row = document.createElement("div");
+      row.className = "category-settings-row leaf";
+      row.append(
+        createCategorySettingsName(category),
+        createCategoryDeleteButton(nodePath, category.label),
+      );
+      item.appendChild(row);
+    }
+
+    list.appendChild(item);
+  });
+
+  return list;
+}
+
+function captureCategorySettingsOpenState() {
+  if (!categorySettingsTree) {
+    return;
+  }
+
+  categorySettingsOpenKeys = new Set(
+    [...categorySettingsTree.querySelectorAll(".category-settings-details[open][data-open-key]")]
+      .map((details) => details.dataset.openKey)
+      .filter(Boolean),
+  );
+}
+
+function getCategorySettingsOpenKey(category, path) {
+  return category.id || path.map(String).join(".");
+}
+
+function createCategorySettingsName(category) {
+  const name = document.createElement("span");
+  name.className = "category-settings-name";
+  name.textContent = category.label;
+  return name;
+}
+
+function createCategoryDeleteButton(path, label) {
+  const button = document.createElement("button");
+  button.className = "category-settings-delete";
+  button.type = "button";
+  button.textContent = "×";
+  button.dataset.categoryAction = "delete";
+  button.dataset.categoryPath = path.join(".");
+  button.setAttribute("aria-label", `删除${label}`);
+  return button;
+}
+
+function createCategoryAddButton(parentPath) {
+  const button = document.createElement("button");
+  button.className = "category-settings-add";
+  button.type = "button";
+  button.textContent = "+";
+  button.dataset.categoryAction = "add";
+  button.dataset.categoryPath = parentPath.join(".");
+  button.setAttribute("aria-label", "添加分类");
+  return button;
+}
+
+function handleCategorySettingsClick(event) {
+  const button = event.target.closest("[data-category-action]");
+  if (button) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const path = parseCategoryPath(button.dataset.categoryPath);
+    if (button.dataset.categoryAction === "add") {
+      promptAddCategory(path);
+      return;
+    }
+
+    if (button.dataset.categoryAction === "delete") {
+      deleteCategoryAtPath(path);
+    }
+    return;
+  }
+
+  const summary = event.target.closest(".category-settings-details > summary");
+  if (!summary || !categorySettingsTree?.contains(summary)) {
+    return;
+  }
+
+  event.preventDefault();
+  toggleCategorySettingsDetails(summary.parentElement);
+}
+
+function toggleCategorySettingsDetails(details) {
+  if (!details || details.classList.contains("is-opening") || details.classList.contains("is-closing")) {
+    return;
+  }
+
+  const children = details.querySelector(":scope > .category-settings-children");
+  if (!children) {
+    details.open = !details.open;
+    captureCategorySettingsOpenState();
+    return;
+  }
+
+  if (details.open) {
+    children.style.height = `${children.scrollHeight}px`;
+    details.classList.add("is-closing");
+    children.getBoundingClientRect();
+    children.style.height = "0px";
+    finishCategorySettingsAnimation(children, () => {
+      details.open = false;
+      details.classList.remove("is-closing");
+      children.style.height = "";
+      captureCategorySettingsOpenState();
+    });
+    return;
+  }
+
+  details.open = true;
+  details.classList.add("is-opening");
+  children.style.height = "0px";
+  window.requestAnimationFrame(() => {
+    children.style.height = `${children.scrollHeight}px`;
+    finishCategorySettingsAnimation(children, () => {
+      details.classList.remove("is-opening");
+      children.style.height = "";
+      captureCategorySettingsOpenState();
+    });
+  });
+}
+
+function finishCategorySettingsAnimation(element, callback) {
+  let done = false;
+  const finish = () => {
+    if (done) {
+      return;
+    }
+    done = true;
+    element.removeEventListener("transitionend", handleTransitionEnd);
+    callback();
+  };
+  const handleTransitionEnd = (event) => {
+    if (event.target === element && event.propertyName === "height") {
+      finish();
+    }
+  };
+
+  element.addEventListener("transitionend", handleTransitionEnd);
+  window.setTimeout(finish, 280);
+}
+
+async function syncCategoriesFromMenu() {
+  if (!syncCategoriesBtn) {
+    return;
+  }
+
+  syncCategoriesBtn.disabled = true;
+  syncCategoriesBtn.classList.add("is-syncing");
+  const previousStatus = releaseInfoStatus.textContent;
+  releaseInfoStatus.textContent = currentSession ? "正在同步云端分类..." : "当前为本地模式，已刷新本地分类";
+
+  try {
+    const synced = await refreshExpenseCategories();
+    releaseInfoStatus.textContent = currentSession
+      ? synced ? "云端分类已同步" : "云端分类同步失败"
+      : "当前为本地模式，已刷新本地分类";
+  } finally {
+    syncCategoriesBtn.disabled = false;
+    syncCategoriesBtn.classList.remove("is-syncing");
+
+    window.setTimeout(() => {
+      if (!releaseInfoModal.hidden && releaseInfoStatus.textContent.includes("分类")) {
+        releaseInfoStatus.textContent = previousStatus || "当前已是最新版本";
+      }
+    }, 1800);
+  }
+}
+
+async function promptAddCategory(parentPath) {
+  if (parentPath.length >= 3) {
+    return;
+  }
+
+  const label = window.prompt("输入新分类名称");
+  const normalizedLabel = label?.trim();
+  if (!normalizedLabel) {
+    return;
+  }
+
+  const siblings = getMutableCategoryChildren(parentPath);
+  if (!siblings || siblings.some((category) => category.label === normalizedLabel)) {
+    return;
+  }
+
+  const parent = parentPath.length ? getMutableCategoryByPath(parentPath) : null;
+  if (parent) {
+    categorySettingsOpenKeys.add(getCategorySettingsOpenKey(parent, parentPath));
+  }
+  const nextCategory = {
+    id: createCategoryId(normalizedLabel, siblings),
+    label: normalizedLabel,
+    icon: parent?.icon || "other",
+  };
+
+  if (currentSession) {
+    const savedCategory = await persistCategoryToSupabase(nextCategory, parent, siblings.length);
+    if (!savedCategory) {
+      return;
+    }
+    Object.assign(nextCategory, savedCategory);
+  }
+
+  siblings.push(nextCategory);
+  if (parentPath.length < 2) {
+    categorySettingsOpenKeys.add(getCategorySettingsOpenKey(nextCategory, [...parentPath, siblings.length - 1]));
+  }
+  if (currentSession && !(await syncCategorySortOrderToSupabase())) {
+    return;
+  }
+  saveExpenseCategories();
+  renderCategorySettings();
+  resetCategoryState();
+}
+
+async function deleteCategoryAtPath(path) {
+  const siblings = getMutableCategoryChildren(path.slice(0, -1));
+  const index = path[path.length - 1];
+  if (!siblings || index < 0 || index >= siblings.length) {
+    return;
+  }
+
+  const category = siblings[index];
+  categorySettingsOpenKeys.delete(getCategorySettingsOpenKey(category, path));
+  if (currentSession && !(await deleteCategoryFromSupabase(category))) {
+    return;
+  }
+
+  siblings.splice(index, 1);
+  if (currentSession && !(await syncCategorySortOrderToSupabase())) {
+    return;
+  }
+  saveExpenseCategories();
+  renderCategorySettings();
+  resetCategoryState();
+}
+
+function parseCategoryPath(value) {
+  if (!value) {
+    return [];
+  }
+
+  return value.split(".").map((part) => Number(part)).filter(Number.isInteger);
+}
+
+function getMutableCategoryChildren(path) {
+  if (!path.length) {
+    return expenseCategories;
+  }
+
+  const parent = getMutableCategoryByPath(path);
+  if (!parent) {
+    return null;
+  }
+
+  if (!Array.isArray(parent.children)) {
+    parent.children = [];
+  }
+
+  return parent.children;
+}
+
+function getMutableCategoryByPath(path) {
+  let nodes = expenseCategories;
+  let current = null;
+
+  for (const index of path) {
+    current = nodes?.[index];
+    if (!current) {
+      return null;
+    }
+    nodes = current.children;
+  }
+
+  return current;
+}
+
+function createCategoryId(label, siblings) {
+  const base = normalizeCategoryId(label);
+  let id = base;
+  let suffix = 2;
+  const siblingIds = new Set(siblings.map((category) => category.id));
+
+  while (siblingIds.has(id)) {
+    id = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return id;
+}
+
+async function refreshExpenseCategories() {
+  const activeUserId = currentSession?.user?.id;
+  if (!supabase || !activeUserId) {
+    expenseCategories = loadExpenseCategories();
+    resetCategoryState();
+    renderCategorySettings();
+    return false;
+  }
+
+  const { data, error } = await supabase
+    .from("expense_categories")
+    .select("id, parent_id, label, icon, sort_order, created_at, parent_label, path_label")
+    .eq("user_id", activeUserId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Supabase category load failed", error);
+    settingsStatus.textContent = `分类同步失败：${error.message}`;
+    return false;
+  }
+
+  if (!Array.isArray(data) || !data.length) {
+    const seeded = await seedDefaultCategoriesForUser(activeUserId);
+    if (!seeded) {
+      return false;
+    }
+    return refreshExpenseCategories();
+  }
+
+  expenseCategories = buildCategoryTreeFromRows(data);
+  await syncCategorySortOrderToSupabase();
+  resetCategoryState();
+  renderCategorySettings();
+  return true;
+}
+
+async function seedDefaultCategoriesForUser(userId) {
+  const sourceCategories = expenseCategories.length ? expenseCategories : EXPENSE_CATEGORIES;
+  const rows = flattenCategoriesForInsert(sourceCategories, userId);
+  if (!rows.length) {
+    return false;
+  }
+
+  const { error } = await supabase.from("expense_categories").insert(rows);
+  if (error) {
+    console.error("Supabase category seed failed", error);
+    settingsStatus.textContent = `分类初始化失败：${error.message}`;
+    return false;
+  }
+
+  return true;
+}
+
+function flattenCategoriesForInsert(categories, userId, parentId = null, depth = 0) {
+  if (!Array.isArray(categories) || depth >= 3) {
+    return [];
+  }
+
+  return categories.flatMap((category, index) => {
+    const id = createUuid();
+    const row = {
+      id,
+      user_id: userId,
+      parent_id: parentId,
+      parent_label: null,
+      path_label: category.label,
+      label: category.label,
+      icon: resolveCategoryIcon(category),
+      sort_order: index,
+    };
+
+    return [
+      row,
+      ...flattenCategoriesForInsertWithPath(category.children, userId, id, category.label, depth + 1),
+    ];
+  });
+}
+
+function flattenCategoriesForInsertWithPath(categories, userId, parentId, parentPathLabel, depth = 1) {
+  if (!Array.isArray(categories) || depth >= 3) {
+    return [];
+  }
+
+  const parentLabel = parentPathLabel.split("/").map((item) => item.trim()).filter(Boolean).at(-1) || null;
+
+  return categories.flatMap((category, index) => {
+    const id = createUuid();
+    const pathLabel = `${parentPathLabel} / ${category.label}`;
+    const row = {
+      id,
+      user_id: userId,
+      parent_id: parentId,
+      parent_label: parentLabel,
+      path_label: pathLabel,
+      label: category.label,
+      icon: resolveCategoryIcon(category),
+      sort_order: index,
+    };
+
+    return [
+      row,
+      ...flattenCategoriesForInsertWithPath(category.children, userId, id, pathLabel, depth + 1),
+    ];
+  });
+}
+
+function buildCategoryTreeFromRows(rows) {
+  const nodeMap = new Map();
+  const roots = [];
+
+  rows.forEach((row) => {
+    nodeMap.set(row.id, {
+      id: row.id,
+      parentId: row.parent_id || null,
+      label: row.label,
+      icon: resolveCategoryIcon(row),
+      sortOrder: Number(row.sort_order || 0),
+      children: [],
+    });
+  });
+
+  nodeMap.forEach((node) => {
+    if (node.parentId && nodeMap.has(node.parentId)) {
+      nodeMap.get(node.parentId).children.push(node);
+      return;
+    }
+    roots.push(node);
+  });
+
+  const sortNodes = (nodes) => {
+    nodes.sort((left, right) => left.sortOrder - right.sortOrder || left.label.localeCompare(right.label, "zh-CN"));
+    nodes.forEach((node) => {
+      sortNodes(node.children);
+      if (!node.children.length) {
+        delete node.children;
+      }
+      delete node.parentId;
+      delete node.sortOrder;
+    });
+  };
+
+  sortNodes(roots);
+  return roots;
+}
+
+async function persistCategoryToSupabase(category, parent, sortOrder) {
+  const activeUserId = currentSession?.user?.id;
+  if (!supabase || !activeUserId) {
+    return category;
+  }
+
+  const payload = {
+    id: createUuid(),
+    user_id: activeUserId,
+    parent_id: parent?.id || null,
+    parent_label: parent?.label || null,
+    path_label: buildCategoryPathLabel(parent, category.label),
+    label: category.label,
+    icon: resolveCategoryIcon(category),
+    sort_order: sortOrder,
+  };
+  const { data, error } = await supabase
+    .from("expense_categories")
+    .insert(payload)
+    .select("id, parent_id, label, icon, sort_order, parent_label, path_label")
+    .single();
+
+  if (error || !data) {
+    console.error("Supabase category insert failed", error || "empty insert response", category);
+    settingsStatus.textContent = error ? `分类添加失败：${error.message}` : "分类添加失败";
+    return null;
+  }
+
+  return {
+    id: data.id,
+    label: data.label,
+    icon: resolveCategoryIcon(data),
+  };
+}
+
+function buildCategoryPathLabel(parent, label) {
+  if (!parent) {
+    return label;
+  }
+
+  return `${findCategoryPathLabel(parent.id) || parent.label} / ${label}`;
+}
+
+function findCategoryPathLabel(categoryId, categories = expenseCategories, ancestors = []) {
+  for (const category of categories) {
+    const nextAncestors = [...ancestors, category.label];
+    if (category.id === categoryId) {
+      return nextAncestors.join(" / ");
+    }
+
+    if (Array.isArray(category.children)) {
+      const childPath = findCategoryPathLabel(categoryId, category.children, nextAncestors);
+      if (childPath) {
+        return childPath;
+      }
+    }
+  }
+
+  return "";
+}
+
+async function deleteCategoryFromSupabase(category) {
+  if (!supabase || !currentSession?.user?.id) {
+    return true;
+  }
+
+  const { error } = await supabase
+    .from("expense_categories")
+    .delete()
+    .eq("id", category.id)
+    .eq("user_id", currentSession.user.id);
+
+  if (error) {
+    console.error("Supabase category delete failed", error, category);
+    settingsStatus.textContent = `分类删除失败：${error.message}`;
+    return false;
+  }
+
+  return true;
+}
+
+async function syncCategorySortOrderToSupabase() {
+  const activeUserId = currentSession?.user?.id;
+  if (!supabase || !activeUserId) {
+    return true;
+  }
+
+  const updates = collectCategoryOrderUpdates(expenseCategories);
+  if (!updates.length) {
+    return true;
+  }
+
+  const updatedAt = new Date().toISOString();
+  const results = await Promise.all(updates.map((update) => (
+    supabase
+      .from("expense_categories")
+      .update({
+        parent_id: update.parentId,
+        parent_label: update.parentLabel,
+        path_label: update.pathLabel,
+        sort_order: update.sortOrder,
+        updated_at: updatedAt,
+      })
+      .eq("id", update.id)
+      .eq("user_id", activeUserId)
+  )));
+
+  const failed = results.find((result) => result.error);
+  if (failed) {
+    console.error("Supabase category order sync failed", failed.error);
+    settingsStatus.textContent = `分类排序同步失败：${failed.error.message}`;
+    return false;
+  }
+
+  return true;
+}
+
+function collectCategoryOrderUpdates(categories, parent = null, parentPathLabel = "") {
+  if (!Array.isArray(categories)) {
+    return [];
+  }
+
+  return categories.flatMap((category, index) => {
+    const pathLabel = parentPathLabel ? `${parentPathLabel} / ${category.label}` : category.label;
+    const update = {
+      id: category.id,
+      parentId: parent?.id || null,
+      parentLabel: parent?.label || null,
+      pathLabel,
+      sortOrder: index,
+    };
+
+    return [
+      update,
+      ...collectCategoryOrderUpdates(category.children, category, pathLabel),
+    ];
+  }).filter((update) => update.id);
+}
+
+function createUuid() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+
+  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (char) => (
+    Number(char) ^ window.crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(char) / 4
+  ).toString(16));
+}
+
+function saveExpenseCategories() {
+  if (currentSession) {
+    return;
+  }
+
+  localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(expenseCategories));
+}
+
+function loadExpenseCategories() {
+  const fallback = cloneExpenseCategories(EXPENSE_CATEGORIES);
+  const stored = loadText(CUSTOM_CATEGORIES_KEY);
+  if (!stored) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(stored);
+    const normalized = normalizeExpenseCategoryTree(parsed);
+    return normalized.length ? normalized : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function cloneExpenseCategories(categories) {
+  return categories.map((category) => ({
+    ...category,
+    children: Array.isArray(category.children) ? cloneExpenseCategories(category.children) : undefined,
+  }));
+}
+
+function normalizeExpenseCategoryTree(categories, depth = 0) {
+  if (!Array.isArray(categories) || depth >= 3) {
+    return [];
+  }
+
+  return categories
+    .map((category) => {
+      const label = String(category?.label || "").trim();
+      if (!label) {
+        return null;
+      }
+
+      const normalized = {
+        id: String(category?.id || normalizeCategoryId(label)),
+        label,
+        icon: resolveCategoryIcon(category),
+      };
+      const children = normalizeExpenseCategoryTree(category.children, depth + 1);
+      if (children.length) {
+        normalized.children = children;
+      }
+      return normalized;
+    })
+    .filter(Boolean);
+}
+
+function getCategoryButtonMarkup(category) {
+  const label = `<span>${escapeHtml(category.label)}</span>`;
+  if (currentCategoryDepth > 0) {
+    return label;
+  }
+
+  return `
+    <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+      ${CATEGORY_ICON_PATHS[resolveCategoryIcon(category)] || CATEGORY_ICON_PATHS.other}
+    </svg>
+    ${label}
+  `;
+}
+
+function resolveCategoryIcon(category) {
+  const icon = category?.icon;
+  if (CATEGORY_ICON_PATHS[icon] && !(icon === "other" && category?.label === "健康")) {
+    return icon;
+  }
+
+  if (category?.label === "健康") {
+    return "health";
+  }
+
+  return "other";
+}
+
+function getCategoryChildren(category) {
+  if (Array.isArray(category.children) && category.children.length) {
+    return category.children.filter((child) => child?.label);
+  }
+
+  return [];
+}
+
+function normalizeCategoryId(label) {
+  return String(label || "category").trim().replace(/\s+/g, "-").toLowerCase();
+}
+
+function getCategoryPosition(angle, radius) {
+  const radians = (angle * Math.PI) / 180;
+  return {
+    x: 50 + Math.cos(radians) * radius,
+    y: 50 + Math.sin(radians) * radius,
+  };
+}
+
+function resetCategoryState() {
+  selectedPurpose = "";
+  selectedCategoryPath = [];
+  currentCategoryPath = [];
+  currentCategoryDepth = 0;
+  renderCategoryWheel(expenseCategories);
+}
+
+function setCategorySelectionFromPath(path) {
+  const normalizedPath = Array.isArray(path)
+    ? path.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+
+  if (!normalizedPath.length) {
+    resetCategoryState();
+    return;
+  }
+
+  selectedCategoryPath = normalizedPath;
+  currentCategoryPath = normalizedPath.slice(0, -1);
+  currentCategoryDepth = currentCategoryPath.length;
+  selectedPurpose = normalizedPath.at(-1) || "";
+  renderCategoryWheel(getCategoryNodesForPath(currentCategoryPath));
+  updatePurposeChips();
+  updateCategoryBackState();
+}
+
+function selectCategoryNode(category) {
+  const nextPath = [...currentCategoryPath, category.label];
+  selectedCategoryPath = nextPath;
+  selectedPurpose = category.label;
+  expensePurposeInput.value = formatCategoryPathInput(nextPath);
+
+  const children = getCategoryChildren(category);
+  if (children.length && nextPath.length < 3) {
+    currentCategoryPath = nextPath;
+    currentCategoryDepth = currentCategoryPath.length;
+    selectedPurpose = "";
+    renderCategoryWheel(children, { animate: true });
+    return;
+  }
+
   updatePurposeChips();
 }
 
 function syncPurposeSelection() {
   const current = expensePurposeInput.value.trim();
-  selectedPurpose = purposeOptions.some((button) => button.dataset.purpose === current) ? current : "";
+  selectedCategoryPath = [];
+  currentCategoryPath = [];
+  currentCategoryDepth = 0;
+  selectedPurpose = "";
   updatePurposeChips();
 }
 
+function formatCategoryPathInput(path) {
+  return path.length ? `${path.join("/")}/` : "";
+}
+
+function stepCategoryBack() {
+  if (!currentCategoryPath.length) {
+    return;
+  }
+
+  currentCategoryPath = currentCategoryPath.slice(0, -1);
+  currentCategoryDepth = currentCategoryPath.length;
+  selectedCategoryPath = [...currentCategoryPath];
+  selectedPurpose = "";
+  expensePurposeInput.value = formatCategoryPathInput(selectedCategoryPath);
+  renderCategoryWheel(getCategoryNodesForPath(currentCategoryPath), { animate: true });
+}
+
+function getCategoryNodesForPath(path) {
+  let nodes = expenseCategories;
+  path.forEach((label) => {
+    const match = nodes.find((category) => category.label === label);
+    nodes = Array.isArray(match?.children) ? match.children : [];
+  });
+  return nodes;
+}
+
+function updateCategoryBackState() {
+  if (!categoryBackBtn) {
+    return;
+  }
+
+  const canGoBack = currentCategoryPath.length > 0;
+  categoryBackBtn.classList.toggle("can-go-back", canGoBack);
+  categoryBackBtn.disabled = !canGoBack;
+  categoryBackBtn.setAttribute("aria-label", canGoBack ? "返回上一级分类" : "当前为一级分类");
+}
+
+function getPurposeWheel() {
+  return purposeOptions[0]?.closest(".category-wheel") || null;
+}
+
+function setPurposeWheelHighlight(purpose) {
+  const purposeWheel = getPurposeWheel();
+  if (!purposeWheel) {
+    return;
+  }
+
+  const activeIndex = purposeOptions.findIndex((button) => button.dataset.purpose === purpose);
+  if (activeIndex < 0) {
+    purposeWheel.style.background = "transparent";
+    purposeWheel.dataset.activePurpose = "";
+    return;
+  }
+
+  const count = Math.max(purposeOptions.length, 1);
+  const step = 360 / count;
+  const offset = CATEGORY_START_ANGLE + 90 - step / 2;
+  const start = activeIndex * step;
+  const end = (activeIndex + 1) * step;
+  purposeWheel.dataset.activePurpose = purpose;
+  purposeWheel.style.background = `conic-gradient(from ${offset}deg, transparent 0deg ${start}deg, var(--category-highlight) ${start}deg ${end}deg, transparent ${end}deg 360deg)`;
+}
+
+function previewPurpose(purpose) {
+  setPurposeWheelHighlight(purpose);
+}
+
+function resetPurposePreview() {
+  setPurposeWheelHighlight(selectedPurpose);
+}
+
 function updatePurposeChips() {
+  setPurposeWheelHighlight(selectedPurpose);
+
   purposeOptions.forEach((button) => {
-    button.classList.toggle("active", button.dataset.purpose === selectedPurpose);
+    const isActive = button.dataset.purpose === selectedPurpose;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+    button.setAttribute("aria-pressed", String(isActive));
   });
 }
 
@@ -1044,6 +2269,13 @@ function resolvePurposeList() {
   const raw = resolvePurpose();
   if (!raw) {
     return [];
+  }
+
+  if (raw.includes("/")) {
+    return raw
+      .split("/")
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
 
   return [...new Set(
@@ -1071,7 +2303,7 @@ function handleDocumentKeydown(event) {
     return;
   }
 
-  if (event.key === "Escape" && !expenseModal.hidden) {
+  if (event.key === "Escape" && isExpenseMode) {
     closeExpenseModal();
     return;
   }
@@ -1116,7 +2348,7 @@ function handleDocumentTouchMove(event) {
     return;
   }
 
-  const scrollable = target.closest(".settings-card, .expense-card, .history-list, .time-wheel-list");
+  const scrollable = target.closest(".settings-scroll-body, .settings-card, .expense-card, .history-list, .time-wheel-list");
   if (!scrollable) {
     event.preventDefault();
     return;
@@ -1145,6 +2377,7 @@ function openDateTimePicker() {
   selectedExpenseDateTime = now;
   syncDateTimeTriggerLabel();
   dateTimePickerModal.hidden = false;
+  document.body.classList.add("datetime-picker-open");
   requestAnimationFrame(() => {
     fillDateTimePicker(now);
   });
@@ -1152,6 +2385,13 @@ function openDateTimePicker() {
 
 function closeDateTimePicker() {
   dateTimePickerModal.hidden = true;
+  document.body.classList.remove("datetime-picker-open");
+}
+
+function handleDateTimePickerBackdropClick(event) {
+  if (event.target === dateTimePickerModal) {
+    closeDateTimePicker();
+  }
 }
 
 function setPickerToNow() {
@@ -1208,8 +2448,12 @@ function stepDateTimePicker(unit, delta) {
 }
 
 function renderDateTimePicker() {
-  pickerDisplayYear.textContent = `${pickerDraftDateTime.getFullYear()}年`;
-  pickerDisplayDate.textContent = formatPickerHeadline(pickerDraftDateTime);
+  if (pickerDisplayYear) {
+    pickerDisplayYear.textContent = `${pickerDraftDateTime.getFullYear()}年`;
+  }
+  if (pickerDisplayDate) {
+    pickerDisplayDate.textContent = formatPickerHeadline(pickerDraftDateTime);
+  }
   pickerMonthLabel.textContent = `${pickerDraftDateTime.getFullYear()}年${pickerDraftDateTime.getMonth() + 1}月`;
   renderCalendarGrid();
   renderTimeWheel(pickerHourWheel, pickerDraftDateTime.getHours());
@@ -1225,8 +2469,9 @@ function renderCalendarGrid() {
   const firstDay = new Date(viewYear, viewMonth, 1);
   const startWeekday = firstDay.getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const calendarCellCount = Math.ceil((startWeekday + daysInMonth) / 7) * 7;
 
-  for (let index = 0; index < 42; index += 1) {
+  for (let index = 0; index < calendarCellCount; index += 1) {
     const dayNumber = index - startWeekday + 1;
     const button = document.createElement("button");
     button.type = "button";
@@ -1451,7 +2696,9 @@ function renderTodayHistory() {
         <div class="history-purpose">${escapeHtml(getPurposeLabel(item))}</div>
         <time>${escapeHtml(formatHistoryTimestamp(item.time || ""))}</time>
       </div>
+      ${getHistoryEditButtonMarkup(item)}
     `;
+    bindExpenseEditButton(row, item);
     historyTodayList.appendChild(row);
   });
 }
@@ -1680,17 +2927,58 @@ function buildMonthDayDetails(dateKey) {
     return details;
   }
 
-  details.innerHTML = entries
-    .map((item) => `
-      <div class="history-day-detail-row">
-        <span class="history-day-detail-time">${escapeHtml(formatHistoryClock(item.time || ""))}</span>
-        <span class="history-day-detail-purpose">${escapeHtml(getPurposeLabel(item))}</span>
-        <strong class="history-day-detail-amount">${formatCurrency(Number(item.amount || 0))}</strong>
-      </div>
-    `)
-    .join("");
+  entries.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "history-day-detail-row";
+    row.innerHTML = `
+      <span class="history-day-detail-time">${escapeHtml(formatHistoryClock(item.time || ""))}</span>
+      <span class="history-day-detail-purpose">${escapeHtml(getPurposeLabel(item))}</span>
+      <strong class="history-day-detail-amount">${formatCurrency(Number(item.amount || 0))}</strong>
+      ${getHistoryEditButtonMarkup(item)}
+    `;
+    bindExpenseEditButton(row, item);
+    details.appendChild(row);
+  });
 
   return details;
+}
+
+function getHistoryEditButtonMarkup(item) {
+  return `
+    <button class="history-edit-btn" type="button" aria-label="修改消费：${escapeHtml(getPurposeLabel(item))} ${escapeHtml(formatCurrency(Number(item.amount || 0)))}">
+      <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+        <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path>
+        <path d="m15 5 4 4"></path>
+      </svg>
+    </button>
+  `;
+}
+
+function bindExpenseEditButton(row, item) {
+  const button = row.querySelector(".history-edit-btn");
+  if (!button) {
+    return;
+  }
+
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openExpenseEditor(item);
+  });
+  button.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      event.stopPropagation();
+      openExpenseEditor(item);
+    }
+  });
+}
+
+function openExpenseEditor(item) {
+  if (!item) {
+    return;
+  }
+
+  openExpenseModal({ editRecord: item });
 }
 
 function createHistoryMonthRowClone(sourceRow, sourceRect) {
@@ -1817,8 +3105,8 @@ function updateBudgetMarker(limit, referenceValue) {
   const ratio = Math.max(0, Math.min(referenceValue / limit, 1));
   const sweep = normalizeSweep(GAUGE_START_ANGLE, GAUGE_END_ANGLE);
   const angle = GAUGE_START_ANGLE + sweep * ratio;
-  const outer = toCartesian(GAUGE_CX, GAUGE_CY, GAUGE_RADIUS + 12, angle);
-  const inner = toCartesian(GAUGE_CX, GAUGE_CY, GAUGE_RADIUS - 12, angle);
+  const outer = toCartesian(GAUGE_CX, GAUGE_CY, GAUGE_RADIUS + 8, angle);
+  const inner = toCartesian(GAUGE_CX, GAUGE_CY, GAUGE_RADIUS - 8, angle);
 
   gaugeBudgetMarker.style.opacity = "1";
   gaugeBudgetMarker.setAttribute("x1", outer.x);
@@ -1906,6 +3194,31 @@ async function persistExpenseToSupabase(optimisticRecord, payload) {
 
   if (error || !data || !data.length) {
     console.error("Supabase expense insert failed", error || "empty insert response", optimisticRecord);
+    return false;
+  }
+
+  return true;
+}
+
+async function updateExpenseInSupabase(record, payload) {
+  if (!supabase || !record?.id) {
+    return false;
+  }
+
+  let query = supabase
+    .from("money")
+    .update(payload)
+    .eq("id", record.id);
+
+  const activeUserId = currentSession?.user?.id;
+  if (activeUserId) {
+    query = query.eq("user_id", activeUserId);
+  }
+
+  const { error } = await query;
+
+  if (error) {
+    console.error("Supabase expense update failed", error, record);
     return false;
   }
 
@@ -2055,8 +3368,8 @@ function drawTicks(cx, cy, radius, startAngle, endAngle, tickCount) {
     const ratio = index / (tickCount - 1);
     const angle = startAngle + sweep * ratio;
     const isThreshold = Math.abs(ratio - 0.5) < 0.0001;
-    const outer = toCartesian(cx, cy, radius - 16, angle);
-    const inner = toCartesian(cx, cy, radius - 26, angle);
+    const outer = toCartesian(cx, cy, radius - 14, angle);
+    const inner = toCartesian(cx, cy, radius - 20, angle);
     const tick = document.createElementNS("http://www.w3.org/2000/svg", "line");
     const tickClass = ["minor"];
 
@@ -2166,9 +3479,26 @@ function getPurposeLabel(item) {
   return item.purpose || "未分类";
 }
 
+function getRecordPurposeList(item) {
+  if (Array.isArray(item?.category) && item.category.length) {
+    return item.category.map((value) => String(value || "").trim()).filter(Boolean);
+  }
+
+  const purpose = String(item?.purpose || "").trim();
+  if (!purpose) {
+    return [];
+  }
+
+  if (purpose.includes("/")) {
+    return purpose.split("/").map((value) => value.trim()).filter(Boolean);
+  }
+
+  return purpose.split(/[\s,，]+/).map((value) => value.trim()).filter(Boolean);
+}
+
 function updateConnectionStatus() {
   if (currentSession) {
-    connectionStatusEl.textContent = "SUPABASE已连接";
+    connectionStatusEl.textContent = "已连接";
     connectionStatusEl.classList.add("connected");
     return;
   }

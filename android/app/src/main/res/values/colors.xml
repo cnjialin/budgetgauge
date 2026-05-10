@@ -4,5 +4,5 @@
     <color name="colorPrimaryDark">#08111D</color>
     <color name="colorAccent">#76A7FF</color>
     <color name="systemBarDark">#08111D</color>
-    <color name="windowBackgroundDark">#000000</color>
+    <color name="windowBackgroundDark">#FCFCFA</color>
 </resources>

@@ -38,7 +38,7 @@
 }
 
 body[data-theme="forest"] {
-  --page-bg-top: #fdfdfb;
+  --page-bg-top: #fcfcfa;
   --page-bg-bottom: #f8f7f3;
   --page-text: #14342b;
   --page-muted: #7e8581;

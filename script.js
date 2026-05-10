@@ -1,10 +1,10 @@
 ﻿import { createClient } from "@supabase/supabase-js";
 
-import { APP_VERSION } from "./app-version.js";
 import { BUILD_STAMP } from "./build-stamp.js";
+import { version as packageVersion } from "./package.json";
 
-const APP_RELEASE_TAG = APP_VERSION;
-const REMOTE_APP_VERSION_URL = "https://raw.githubusercontent.com/cnjialin/budgetgauge/main/app-version.js";
+const APP_RELEASE_TAG = `v${packageVersion}`;
+const REMOTE_APP_VERSION_URL = "https://raw.githubusercontent.com/cnjialin/budgetgauge/main/package.json";
 const GITHUB_RELEASES_PAGE_URL = "https://github.com/cnjialin/budgetgauge/releases";
 const GITHUB_RELEASE_APK_URL_TEMPLATE = "https://github.com/cnjialin/budgetgauge/releases/download/{tag}/app-release.apk";
 const DEFAULT_SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
@@ -1340,7 +1340,7 @@ async function checkForAppUpdate() {
       return;
     }
 
-    const latestTag = parseRemoteAppVersion(await response.text());
+    const latestTag = parseRemotePackageVersion(await response.text());
 
     if (!latestTag) {
       return;
@@ -1379,9 +1379,14 @@ function normalizeReleaseVersion(tag) {
     .filter((part) => Number.isFinite(part));
 }
 
-function parseRemoteAppVersion(source) {
-  const match = String(source || "").match(/APP_VERSION\s*=\s*["']([^"']+)["']/);
-  return String(match?.[1] || "").trim();
+function parseRemotePackageVersion(source) {
+  try {
+    const parsed = JSON.parse(String(source || ""));
+    const version = String(parsed?.version || "").trim();
+    return version ? `v${version.replace(/^[vV]/, "")}` : "";
+  } catch {
+    return "";
+  }
 }
 
 function applyReleaseBadgeState(releaseInfo) {

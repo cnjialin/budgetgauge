@@ -3,8 +3,6 @@ import { resolve } from "node:path";
 
 const packagePath = resolve("package.json");
 const packageLockPath = resolve("package-lock.json");
-const versionJsonPath = resolve("version.json");
-const appVersionPath = resolve("app-version.js");
 const androidBuildGradlePath = resolve("android", "app", "build.gradle");
 
 const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
@@ -13,9 +11,6 @@ const appVersion = String(packageJson.version || "").trim();
 if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(appVersion)) {
   throw new Error(`package.json version must be a semantic version, got: ${appVersion || "(empty)"}`);
 }
-
-writeFileSync(versionJsonPath, `${JSON.stringify({ version: appVersion }, null, "\t")}\n`, "utf8");
-writeFileSync(appVersionPath, `export const APP_VERSION = "v${appVersion}";\n`, "utf8");
 
 const packageLock = JSON.parse(readFileSync(packageLockPath, "utf8"));
 packageLock.version = appVersion;

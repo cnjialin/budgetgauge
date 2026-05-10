@@ -21,6 +21,7 @@ const THEME_KEY = "budget-gauge-theme";
 const CUSTOM_CATEGORIES_KEY = "budget-gauge-categories";
 const THEMES = new Set(["default", "forest"]);
 
+const gaugePage = document.querySelector(".gauge-page");
 const supabaseUrlInput = document.querySelector("#supabaseUrlInput");
 const supabaseKeyInput = document.querySelector("#supabaseKeyInput");
 const monthlyBudgetInput = document.querySelector("#monthlyBudgetInput");
@@ -35,12 +36,15 @@ const connectionStatusEl = document.querySelector("#connectionStatus");
 const centerLabelEl = document.querySelector(".center-label");
 const remainingBudgetEl = document.querySelector("#remainingBudget");
 const usageTextEl = document.querySelector("#usageText");
+const quickExpenseAmountInput = document.querySelector("#quickExpenseAmountInput");
+const quickExpenseContinueBtn = document.querySelector("#quickExpenseContinueBtn");
 const gaugeReferencePath = document.querySelector("#gaugeReferencePath");
 const gaugeValuePath = document.querySelector("#gaugeValuePath");
 const gaugeTicks = document.querySelector("#gaugeTicks");
 const gaugeBudgetMarker = document.querySelector("#gaugeBudgetMarker");
 const expenseDateTimeTrigger = document.querySelector("#expenseDateTimeTrigger");
 const expenseAmountInput = document.querySelector("#expenseAmountInput");
+const recordAmountField = document.querySelector(".record-amount-field");
 const expensePurposeInput = document.querySelector("#expensePurposeInput");
 const purposeWheel = document.querySelector("#purposeOptions");
 const categoryOptions = document.querySelector("#categoryOptions");
@@ -84,6 +88,11 @@ const historyTodayBtn = document.querySelector("#historyTodayBtn");
 const historyMonthBtn = document.querySelector("#historyMonthBtn");
 const historyCard = document.querySelector(".history-card");
 const historyFilter = document.querySelector(".history-filter");
+const deleteConfirmModal = document.querySelector("#deleteConfirmModal");
+const deleteConfirmBackdrop = document.querySelector("#deleteConfirmBackdrop");
+const deleteConfirmText = document.querySelector("#deleteConfirmText");
+const cancelDeleteExpenseBtn = document.querySelector("#cancelDeleteExpenseBtn");
+const confirmDeleteExpenseBtn = document.querySelector("#confirmDeleteExpenseBtn");
 const debugBuildBadge = document.querySelector("#debugBuildBadge");
 const releaseInfoModal = document.querySelector("#releaseInfoModal");
 const releaseInfoBackdrop = document.querySelector("#releaseInfoBackdrop");
@@ -118,6 +127,9 @@ let historySwipeStartX = 0;
 let historySwipeStartY = 0;
 let historySwipeCurrentDeltaX = 0;
 let isHistorySwipeActive = false;
+let historyDeleteHoldTimer = 0;
+let historyDeleteSuppressClick = false;
+let pendingDeleteExpenseRecord = null;
 let selectedPurpose = "";
 let selectedCategoryPath = [];
 let currentCategoryNodes = [];
@@ -134,6 +146,7 @@ let supabase = createSupabaseClient(supabaseUrl, supabaseKey);
 let isBudgetOnlySettingsMode = false;
 let activeMainView = "home";
 let isExpenseMode = false;
+let isQuickExpenseMode = false;
 let editingExpenseRecord = null;
 let pageTransitionTimer = 0;
 let latestReleaseInfo = null;
@@ -307,6 +320,9 @@ async function initialize() {
 
   openExpenseModalBtn.addEventListener("click", handleGaugeCenterClick);
   remainingBudgetEl.addEventListener("click", handleGaugeCenterClick);
+  usageTextEl.addEventListener("click", handleGaugeCenterClick);
+  usageTextEl.addEventListener("keydown", handleUsageTextKeydown);
+  gaugePage?.addEventListener("click", handleGaugePageClick);
   homeTabBtn.addEventListener("click", openHomeView);
   openHistoryBtn.addEventListener("click", openHistoryModal);
   openSettingsBtn.addEventListener("click", toggleReleaseInfoFromTopMenu);
@@ -322,6 +338,9 @@ async function initialize() {
   settingsBackdrop.addEventListener("click", closeSettingsModal);
   closeHistoryBtn.addEventListener("click", closeHistoryModal);
   historyBackdrop.addEventListener("click", closeHistoryModal);
+  deleteConfirmBackdrop.addEventListener("click", closeDeleteConfirmModal);
+  cancelDeleteExpenseBtn.addEventListener("click", closeDeleteConfirmModal);
+  confirmDeleteExpenseBtn.addEventListener("click", confirmPendingDeleteExpenseRecord);
   historyTodayBtn.addEventListener("click", () => setHistoryRange("today"));
   historyMonthBtn.addEventListener("click", () => setHistoryRange("month"));
   historyCard.addEventListener("touchstart", handleHistorySwipeStart, { passive: true });
@@ -335,6 +354,11 @@ async function initialize() {
   closeReleaseInfoBtn.addEventListener("click", closeReleaseInfoModal);
   releaseInfoBackdrop.addEventListener("click", closeReleaseInfoModal);
   expenseDateTimeTrigger.addEventListener("click", openDateTimePicker);
+  remainingBudgetEl.addEventListener("input", handleQuickExpenseTextInput);
+  remainingBudgetEl.addEventListener("keydown", handleQuickExpenseInputKeydown);
+  quickExpenseContinueBtn?.addEventListener("click", continueQuickExpenseEntry);
+  recordAmountField?.addEventListener("pointerdown", handleRecordAmountPointerDown);
+  recordAmountField?.addEventListener("click", handleRecordAmountClick);
   expenseAmountInput.addEventListener("keydown", handleExpenseInputKeydown);
   expensePurposeInput.addEventListener("keydown", handleExpenseInputKeydown);
   expensePurposeInput.addEventListener("input", syncPurposeSelection);
@@ -376,6 +400,12 @@ function syncViewportMetrics() {
 
   viewportMetricsFrame = requestAnimationFrame(() => {
     viewportMetricsFrame = 0;
+    if (isQuickExpenseMode) {
+      document.documentElement.style.setProperty("--keyboard-inset", "0px");
+      document.body.classList.remove("keyboard-open");
+      return;
+    }
+
     const viewport = window.visualViewport;
     const viewportWidth = Math.round(viewport?.width || window.innerWidth || document.documentElement.clientWidth);
     const viewportHeight = Math.max(320, Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight));
@@ -408,6 +438,13 @@ function syncViewportMetrics() {
 
 function handleEditableFocusIn(event) {
   if (!isKeyboardEditable(event.target)) {
+    return;
+  }
+
+  if (isQuickExpenseMode && event.target === remainingBudgetEl) {
+    focusedEditable = null;
+    document.documentElement.style.setProperty("--keyboard-inset", "0px");
+    document.body.classList.remove("keyboard-open");
     return;
   }
 
@@ -501,6 +538,11 @@ function scrollFocusedControlIntoView(control) {
 
 function openExpenseModal(options = {}) {
   const editRecord = options.editRecord || null;
+  const initialAmount = editRecord ? "" : formatOptionalNumberInput(sanitizeNumber(options.initialAmount));
+  const shouldCloseQuickAfterRecordMode = isQuickExpenseMode;
+  if (!shouldCloseQuickAfterRecordMode) {
+    closeQuickExpenseEntry({ render: false, focus: false });
+  }
   hidePageView(settingsModal);
   hidePageView(historyModal);
   hidePageView(releaseInfoModal);
@@ -508,11 +550,14 @@ function openExpenseModal(options = {}) {
   isExpenseMode = true;
   editingExpenseRecord = editRecord;
   document.body.dataset.mode = "record";
+  if (shouldCloseQuickAfterRecordMode) {
+    closeQuickExpenseEntry({ render: false, focus: false });
+  }
   const editDate = editRecord ? new Date(editRecord.time || "") : null;
   selectedExpenseDateTime = editDate && !Number.isNaN(editDate.getTime()) ? editDate : new Date();
   syncDateTimeTriggerLabel();
   closeDateTimePicker();
-  expenseAmountInput.value = editRecord ? formatOptionalNumberInput(Number(editRecord.amount || 0)) : "";
+  expenseAmountInput.value = editRecord ? formatOptionalNumberInput(Number(editRecord.amount || 0)) : initialAmount;
   expensePurposeInput.value = editRecord ? formatCategoryPathInput(getRecordPurposeList(editRecord)) : "";
   expenseStatus.textContent = editRecord
     ? "正在修改这笔消费"
@@ -527,14 +572,164 @@ function closeExpenseModal(options = {}) {
   if (document.body.dataset.mode === "record") {
     delete document.body.dataset.mode;
   }
+  if (options.render !== false) {
+    renderGauge();
+  }
   if (options.focus !== false) {
     openExpenseModalBtn.focus();
   }
 }
 
+function openQuickExpenseEntry() {
+  if (isExpenseMode || activeMainView !== "home") {
+    return;
+  }
+
+  isQuickExpenseMode = true;
+  document.body.classList.add("quick-expense-mode");
+  centerLabelEl.textContent = "消费";
+  quickExpenseAmountInput.value = "";
+  remainingBudgetEl.textContent = "";
+  remainingBudgetEl.contentEditable = "true";
+  remainingBudgetEl.inputMode = "decimal";
+  remainingBudgetEl.enterKeyHint = "next";
+  remainingBudgetEl.setAttribute("role", "textbox");
+  remainingBudgetEl.setAttribute("aria-label", "消费金额");
+  remainingBudgetEl.dataset.placeholder = "0.00";
+  syncQuickExpenseContinueState();
+  focusQuickExpenseAmountInput();
+}
+
+function closeQuickExpenseEntry(options = {}) {
+  if (!isQuickExpenseMode) {
+    return;
+  }
+
+  isQuickExpenseMode = false;
+  document.body.classList.remove("quick-expense-mode");
+  quickExpenseAmountInput.value = "";
+  remainingBudgetEl.contentEditable = "false";
+  remainingBudgetEl.removeAttribute("inputmode");
+  remainingBudgetEl.removeAttribute("enterkeyhint");
+  remainingBudgetEl.removeAttribute("role");
+  remainingBudgetEl.removeAttribute("aria-label");
+  remainingBudgetEl.removeAttribute("data-placeholder");
+  syncQuickExpenseContinueState();
+  remainingBudgetEl.blur();
+  centerLabelEl.textContent = "今日剩余";
+
+  if (options.render !== false) {
+    renderGauge();
+  }
+
+  if (options.focus) {
+    remainingBudgetEl.focus?.();
+  }
+}
+
+function continueQuickExpenseEntry(event) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  const amount = getQuickExpenseAmount();
+
+  if (amount <= 0) {
+    syncQuickExpenseContinueState();
+    focusQuickExpenseAmountInput();
+    return;
+  }
+
+  document.body.classList.add("quick-expense-committing");
+  openExpenseModal({ initialAmount: amount });
+  requestAnimationFrame(() => {
+    document.body.classList.remove("quick-expense-committing");
+  });
+}
+
+function syncQuickExpenseContinueState() {
+  if (!quickExpenseContinueBtn) {
+    return;
+  }
+
+  quickExpenseContinueBtn.disabled = getQuickExpenseAmount() <= 0;
+}
+
+function handleQuickExpenseInputKeydown(event) {
+  if (event.key === "Enter") {
+    continueQuickExpenseEntry(event);
+    return;
+  }
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeQuickExpenseEntry();
+  }
+}
+
+function focusQuickExpenseAmountInput() {
+  remainingBudgetEl.focus({ preventScroll: true });
+  moveCaretToEditableEnd(remainingBudgetEl);
+}
+
+function getQuickExpenseAmount() {
+  return sanitizeNumber(remainingBudgetEl.textContent.replace(/[^\d.]/g, ""));
+}
+
+function moveCaretToEditableEnd(element) {
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function handleQuickExpenseTextInput() {
+  if (!isQuickExpenseMode) {
+    return;
+  }
+
+  const normalized = remainingBudgetEl.textContent
+    .replace(/[^\d.]/g, "")
+    .replace(/(\..*)\./g, "$1");
+
+  if (remainingBudgetEl.textContent !== normalized) {
+    remainingBudgetEl.textContent = normalized;
+    moveCaretToEditableEnd(remainingBudgetEl);
+  }
+
+  syncQuickExpenseContinueState();
+}
+
 function clearExpenseAmount() {
   expenseAmountInput.value = "";
-  expenseAmountInput.focus();
+  focusExpenseAmountInput();
+}
+
+function handleRecordAmountPointerDown(event) {
+  if (event.pointerType === "mouse" || document.body.dataset.mode !== "record") {
+    return;
+  }
+
+  focusExpenseAmountInput();
+}
+
+function handleRecordAmountClick() {
+  if (document.body.dataset.mode !== "record") {
+    return;
+  }
+
+  focusExpenseAmountInput();
+}
+
+function focusExpenseAmountInput() {
+  expenseAmountInput.focus({ preventScroll: true });
+
+  const valueLength = expenseAmountInput.value.length;
+  try {
+    expenseAmountInput.setSelectionRange(valueLength, valueLength);
+  } catch {
+    // Number inputs do not support text selection in every browser.
+  }
 }
 
 function handleGaugeCenterClick(event) {
@@ -547,7 +742,38 @@ function handleGaugeCenterClick(event) {
     return;
   }
 
-  openExpenseModal();
+  event.preventDefault();
+  event.stopPropagation();
+  openQuickExpenseEntry();
+}
+
+function handleUsageTextKeydown(event) {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+
+  handleGaugeCenterClick(event);
+}
+
+function handleGaugePageClick(event) {
+  if (!isQuickExpenseMode) {
+    return;
+  }
+
+  const target = event.target;
+
+  if (
+    target instanceof Element
+    && (
+      target.closest(".gauge-center")
+      || target.closest("#quickExpenseContinueBtn")
+      || target.closest(".bottom-nav")
+    )
+  ) {
+    return;
+  }
+
+  closeQuickExpenseEntry();
 }
 
 function normalizeTheme(value) {
@@ -573,6 +799,10 @@ function setTheme(theme) {
 function setActiveMainView(nextView) {
   if (nextView !== "home" && isExpenseMode) {
     closeExpenseModal({ focus: false });
+  }
+
+  if (nextView !== "home" && isQuickExpenseMode) {
+    closeQuickExpenseEntry({ render: false, focus: false });
   }
 
   activeMainView = nextView;
@@ -629,6 +859,7 @@ function hidePageView(pageEl, { animate = false } = {}) {
 }
 
 function openHomeView() {
+  closeQuickExpenseEntry({ render: false, focus: false });
   hidePageView(settingsModal);
   hidePageView(historyModal);
   hidePageView(releaseInfoModal);
@@ -650,6 +881,7 @@ function toggleReleaseInfoFromTopMenu() {
 }
 
 function openSettingsModal(mode = "full", options = {}) {
+  closeQuickExpenseEntry({ render: false, focus: false });
   isBudgetOnlySettingsMode = mode === "budget";
   hidePageView(historyModal);
   hidePageView(releaseInfoModal);
@@ -697,6 +929,7 @@ function closeSettingsModal(options = {}) {
 }
 
 async function openHistoryModal() {
+  closeQuickExpenseEntry({ render: false, focus: false });
   renderHistory();
   hidePageView(settingsModal);
   hidePageView(releaseInfoModal);
@@ -708,6 +941,7 @@ async function openHistoryModal() {
 }
 
 function closeHistoryModal() {
+  closeDeleteConfirmModal();
   hidePageView(historyModal);
   historyCard.setAttribute("role", "dialog");
   historyCard.setAttribute("aria-modal", "true");
@@ -793,6 +1027,7 @@ function handleHistorySwipeCancel() {
 }
 
 function openReleaseInfoModal(options = {}) {
+  closeQuickExpenseEntry({ render: false, focus: false });
   currentVersionValue.textContent = APP_RELEASE_TAG;
   renderCategorySettings();
 
@@ -869,7 +1104,7 @@ async function confirmExpense() {
     renderHistory();
   }
   expenseStatus.textContent = "";
-  closeExpenseModal();
+  closeExpenseModal({ render: false });
 
   if (currentSession) {
     const saved = await persistExpenseToSupabase(optimisticRecord, {
@@ -1357,6 +1592,34 @@ async function updateExpenseRecord(record, nextRecord) {
 
   Object.assign(record, previousRecord);
   scheduleMonthHistorySummaryForCurrentData();
+  renderGauge();
+  renderHistory();
+}
+
+async function deleteExpenseRecord(record) {
+  const previousHistory = [...expenseHistory];
+  expenseHistory = expenseHistory.filter((item) => item !== record);
+  rebuildMonthHistorySummaryForCurrentData();
+
+  if (!currentSession) {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(expenseHistory));
+  }
+
+  renderGauge();
+  renderHistory();
+
+  if (!currentSession) {
+    return;
+  }
+
+  const deleted = await deleteExpenseFromSupabase(record);
+  if (deleted) {
+    await refreshExpenses();
+    return;
+  }
+
+  expenseHistory = previousHistory;
+  rebuildMonthHistorySummaryForCurrentData();
   renderGauge();
   renderHistory();
 }
@@ -2312,6 +2575,11 @@ function handleDocumentKeydown(event) {
     return;
   }
 
+  if (event.key === "Escape" && isQuickExpenseMode) {
+    closeQuickExpenseEntry();
+    return;
+  }
+
   if (event.key === "Escape" && !settingsModal.hidden) {
     closeSettingsModal();
     return;
@@ -2319,6 +2587,11 @@ function handleDocumentKeydown(event) {
 
   if (event.key === "Escape" && !historyModal.hidden) {
     closeHistoryModal();
+    return;
+  }
+
+  if (event.key === "Escape" && !deleteConfirmModal.hidden) {
+    closeDeleteConfirmModal();
     return;
   }
 
@@ -2631,8 +2904,7 @@ function renderGaugeState(animate = true, fromFull = false) {
     gaugeValuePath.style.transition = "none";
     gaugeReferencePath.style.strokeDasharray = `${pathLength}`;
     gaugeReferencePath.style.strokeDashoffset = `${pathLength * (1 - referenceRatio)}`;
-    gaugeValuePath.style.strokeDasharray = `${pathLength}`;
-    gaugeValuePath.style.strokeDashoffset = "0";
+    setGaugeValueProgress(pathLength, 1);
     gaugeValuePath.classList.toggle("warning", false);
     displayedRemaining = limit;
     remainingBudgetEl.textContent = formatGaugeCurrency(limit);
@@ -2644,8 +2916,7 @@ function renderGaugeState(animate = true, fromFull = false) {
     stagedGaugeAnimationFrame = requestAnimationFrame(() => {
       stagedGaugeAnimationFrame = requestAnimationFrame(() => {
         stagedGaugeAnimationFrame = 0;
-        gaugeValuePath.style.strokeDasharray = `${pathLength}`;
-        gaugeValuePath.style.strokeDashoffset = `${pathLength * (1 - ratio)}`;
+        setGaugeValueProgress(pathLength, ratio);
         gaugeValuePath.classList.toggle("warning", isWarning);
         animateRemainingBudget(remaining, true);
       });
@@ -2660,8 +2931,7 @@ function renderGaugeState(animate = true, fromFull = false) {
     gaugeValuePath.style.transition = "none";
     gaugeReferencePath.style.strokeDasharray = `${pathLength}`;
     gaugeReferencePath.style.strokeDashoffset = `${pathLength * (1 - referenceRatio)}`;
-    gaugeValuePath.style.strokeDasharray = `${pathLength}`;
-    gaugeValuePath.style.strokeDashoffset = `${pathLength * (1 - ratio)}`;
+    setGaugeValueProgress(pathLength, ratio);
     gaugeReferencePath.getBoundingClientRect();
     gaugeValuePath.getBoundingClientRect();
     gaugeReferencePath.style.transition = previousReferenceTransition;
@@ -2669,12 +2939,18 @@ function renderGaugeState(animate = true, fromFull = false) {
   } else {
     gaugeReferencePath.style.strokeDasharray = `${pathLength}`;
     gaugeReferencePath.style.strokeDashoffset = `${pathLength * (1 - referenceRatio)}`;
-    gaugeValuePath.style.strokeDasharray = `${pathLength}`;
-    gaugeValuePath.style.strokeDashoffset = `${pathLength * (1 - ratio)}`;
+    setGaugeValueProgress(pathLength, ratio);
   }
   gaugeValuePath.classList.toggle("warning", isWarning);
 
   animateRemainingBudget(remaining, animate);
+}
+
+function setGaugeValueProgress(pathLength, ratio) {
+  const normalizedRatio = Math.max(0, Math.min(Number(ratio) || 0, 1));
+  gaugeValuePath.style.strokeDasharray = `${pathLength}`;
+  gaugeValuePath.style.strokeDashoffset = `${pathLength * (1 - normalizedRatio)}`;
+  gaugeValuePath.style.opacity = normalizedRatio > 0 ? "1" : "0";
 }
 
 function renderHistory() {
@@ -2722,21 +2998,7 @@ function scheduleMonthHistorySummary(monthItems, summaryKey) {
   const taskId = monthHistorySummaryTaskId;
 
   const compute = () => {
-    const grouped = new Map();
-
-    monthItems.forEach((item) => {
-      const dateKey = formatHistoryDateOnly(item.time || "");
-      if (!dateKey) {
-        return;
-      }
-
-      const current = grouped.get(dateKey) || { dateKey, total: 0, count: 0 };
-      current.total += Number(item.amount || 0);
-      current.count += 1;
-      grouped.set(dateKey, current);
-    });
-
-    const summary = Array.from(grouped.values()).sort((left, right) => right.dateKey.localeCompare(left.dateKey));
+    const summary = getMonthHistorySummary(monthItems);
     monthHistorySummaryKey = summaryKey;
     monthHistorySummaryCache = summary;
 
@@ -2753,6 +3015,24 @@ function scheduleMonthHistorySummary(monthItems, summaryKey) {
   }
 
   window.setTimeout(compute, 0);
+}
+
+function getMonthHistorySummary(monthItems) {
+  const grouped = new Map();
+
+  monthItems.forEach((item) => {
+    const dateKey = formatHistoryDateOnly(item.time || "");
+    if (!dateKey) {
+      return;
+    }
+
+    const current = grouped.get(dateKey) || { dateKey, total: 0, count: 0 };
+    current.total += Number(item.amount || 0);
+    current.count += 1;
+    grouped.set(dateKey, current);
+  });
+
+  return Array.from(grouped.values()).sort((left, right) => right.dateKey.localeCompare(left.dateKey));
 }
 
 function scheduleMonthHistorySummaryForCurrentData() {
@@ -2772,6 +3052,14 @@ function scheduleMonthHistorySummaryForCurrentData() {
   }
 
   scheduleMonthHistorySummary(monthItems, nextKey);
+}
+
+function rebuildMonthHistorySummaryForCurrentData() {
+  const monthItems = expenseHistory.filter((item) => isInCurrentLocalMonth(item.time));
+  monthHistorySummaryKey = monthItems
+    .map((item) => `${item.time || ""}|${Number(item.amount || 0)}`)
+    .join("~");
+  monthHistorySummaryCache = getMonthHistorySummary(monthItems);
 }
 
 function renderMonthSummaryRows(summary) {
@@ -2950,11 +3238,29 @@ function buildMonthDayDetails(dateKey) {
 function getHistoryEditButtonMarkup(item) {
   return `
     <button class="history-edit-btn" type="button" aria-label="修改消费：${escapeHtml(getPurposeLabel(item))} ${escapeHtml(formatCurrency(Number(item.amount || 0)))}">
-      <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
-        <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path>
-        <path d="m15 5 4 4"></path>
-      </svg>
+      ${getHistoryEditIconMarkup()}
     </button>
+  `;
+}
+
+function getHistoryEditIconMarkup() {
+  return `
+    <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path>
+      <path d="m15 5 4 4"></path>
+    </svg>
+  `;
+}
+
+function getHistoryDeleteIconMarkup() {
+  return `
+    <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+      <path d="M3 6h18"></path>
+      <path d="M8 6V4h8v2"></path>
+      <path d="m19 6-.8 14H5.8L5 6"></path>
+      <path d="M10 11v5"></path>
+      <path d="M14 11v5"></path>
+    </svg>
   `;
 }
 
@@ -2964,17 +3270,105 @@ function bindExpenseEditButton(row, item) {
     return;
   }
 
+  button.addEventListener("pointerdown", (event) => {
+    if (event.button && event.button !== 0) {
+      return;
+    }
+
+    clearHistoryDeleteHoldTimer();
+    historyDeleteHoldTimer = window.setTimeout(() => {
+      historyDeleteHoldTimer = 0;
+      historyDeleteSuppressClick = true;
+      setHistoryButtonDeleteMode(button, item);
+    }, 620);
+  });
+  button.addEventListener("pointerup", clearHistoryDeleteHoldTimer);
+  button.addEventListener("pointerleave", clearHistoryDeleteHoldTimer);
+  button.addEventListener("pointercancel", clearHistoryDeleteHoldTimer);
+  button.addEventListener("contextmenu", (event) => event.preventDefault());
   button.addEventListener("click", (event) => {
     event.stopPropagation();
+    clearHistoryDeleteHoldTimer();
+
+    if (historyDeleteSuppressClick) {
+      historyDeleteSuppressClick = false;
+      return;
+    }
+
+    if (button.dataset.action === "delete") {
+      confirmDeleteExpenseRecord(item);
+      return;
+    }
+
     openExpenseEditor(item);
   });
   button.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       event.stopPropagation();
-      openExpenseEditor(item);
+      if (button.dataset.action === "delete") {
+        confirmDeleteExpenseRecord(item);
+      } else {
+        openExpenseEditor(item);
+      }
     }
   });
+}
+
+function clearHistoryDeleteHoldTimer() {
+  if (!historyDeleteHoldTimer) {
+    return;
+  }
+
+  window.clearTimeout(historyDeleteHoldTimer);
+  historyDeleteHoldTimer = 0;
+}
+
+function setHistoryButtonDeleteMode(button, item) {
+  document.querySelectorAll(".history-edit-btn.is-delete-mode").forEach((existingButton) => {
+    if (existingButton !== button) {
+      resetHistoryButtonMode(existingButton);
+    }
+  });
+
+  button.classList.add("is-delete-mode");
+  button.dataset.action = "delete";
+  button.setAttribute("aria-label", `删除消费：${getPurposeLabel(item)} ${formatCurrency(Number(item.amount || 0))}`);
+  button.innerHTML = getHistoryDeleteIconMarkup();
+}
+
+function resetHistoryButtonMode(button) {
+  button.classList.remove("is-delete-mode");
+  delete button.dataset.action;
+  button.setAttribute("aria-label", "修改消费");
+  button.innerHTML = getHistoryEditIconMarkup();
+}
+
+async function confirmDeleteExpenseRecord(item) {
+  if (!item) {
+    return;
+  }
+
+  pendingDeleteExpenseRecord = item;
+  deleteConfirmText.textContent = `${formatCurrency(Number(item.amount || 0))} · ${getPurposeLabel(item)}`;
+  deleteConfirmModal.hidden = false;
+  confirmDeleteExpenseBtn.focus();
+}
+
+function closeDeleteConfirmModal() {
+  pendingDeleteExpenseRecord = null;
+  deleteConfirmModal.hidden = true;
+}
+
+async function confirmPendingDeleteExpenseRecord() {
+  const record = pendingDeleteExpenseRecord;
+  if (!record) {
+    closeDeleteConfirmModal();
+    return;
+  }
+
+  closeDeleteConfirmModal();
+  await deleteExpenseRecord(record);
 }
 
 function openExpenseEditor(item) {
@@ -3223,6 +3617,31 @@ async function updateExpenseInSupabase(record, payload) {
 
   if (error) {
     console.error("Supabase expense update failed", error, record);
+    return false;
+  }
+
+  return true;
+}
+
+async function deleteExpenseFromSupabase(record) {
+  if (!supabase || !record?.id) {
+    return false;
+  }
+
+  let query = supabase
+    .from("money")
+    .delete()
+    .eq("id", record.id);
+
+  const activeUserId = currentSession?.user?.id;
+  if (activeUserId) {
+    query = query.eq("user_id", activeUserId);
+  }
+
+  const { error } = await query;
+
+  if (error) {
+    console.error("Supabase expense delete failed", error, record);
     return false;
   }
 

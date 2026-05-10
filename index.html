@@ -27,7 +27,7 @@
           <span class="record-amount-spacer" aria-hidden="true"></span>
           <span class="record-amount-label">消费记录</span>
           <span class="record-amount-prefix" aria-hidden="true">¥</span>
-          <input id="expenseAmountInput" type="number" min="0" step="0.01" placeholder="0.00">
+          <input id="expenseAmountInput" type="number" inputmode="decimal" enterkeyhint="done" min="0" step="0.01" placeholder="0.00">
           <button id="clearExpenseAmountBtn" class="record-clear-btn" type="button" aria-label="清空金额">
             <span aria-hidden="true"></span>
           </button>
@@ -83,6 +83,10 @@
           <div class="gauge-center" aria-live="polite">
             <p class="center-label">当前剩余</p>
             <strong id="remainingBudget">¥0.00</strong>
+            <label class="quick-expense-field" aria-label="消费金额">
+              <span aria-hidden="true">¥</span>
+              <input id="quickExpenseAmountInput" type="number" inputmode="decimal" enterkeyhint="next" min="0" step="0.01" placeholder="0.00">
+            </label>
             <span id="usageText">已使用 0%</span>
           </div>
         </div>
@@ -109,6 +113,11 @@
 
     <button id="openExpenseModalBtn" class="add-expense-btn" type="button" aria-label="记录一笔消费">
       <span aria-hidden="true"></span>
+    </button>
+    <button id="quickExpenseContinueBtn" class="quick-expense-continue-btn" type="button" aria-label="继续选择消费分类" disabled>
+      <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+        <path d="M5.5 12.6 9.8 16.9 18.8 7.6"></path>
+      </svg>
     </button>
     <div class="record-action-dock" aria-label="记录操作">
       <button id="cancelExpenseBtn" class="expense-round-btn cancel" type="button" aria-label="取消">
@@ -260,6 +269,19 @@
       </div>
       <div class="expense-actions history-actions">
         <button id="closeHistoryBtn" class="expense-btn ghost" type="button">关闭</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="deleteConfirmModal" class="settings-modal delete-confirm-modal" hidden>
+    <div id="deleteConfirmBackdrop" class="expense-backdrop"></div>
+    <section class="settings-card delete-confirm-card" role="dialog" aria-modal="true" aria-labelledby="deleteConfirmTitle">
+      <p class="expense-kicker">Delete Expense</p>
+      <h2 id="deleteConfirmTitle">删除这笔消费？</h2>
+      <p id="deleteConfirmText" class="delete-confirm-text"></p>
+      <div class="expense-actions delete-confirm-actions">
+        <button id="cancelDeleteExpenseBtn" class="expense-btn ghost" type="button">取消</button>
+        <button id="confirmDeleteExpenseBtn" class="expense-btn danger" type="button">删除</button>
       </div>
     </section>
   </div>

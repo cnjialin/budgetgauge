@@ -115,6 +115,17 @@ option,
 }
 
 .gauge-page {
+  --record-ring-top-boundary: calc(176px + env(safe-area-inset-top, 0px));
+  --record-ring-bottom-boundary: calc(112px + env(safe-area-inset-bottom, 0px));
+  --record-ring-max-size: 760px;
+  --record-ring-size: min(
+    calc(100vw - 20px),
+    calc(var(--app-viewport-height) - 2 * var(--record-ring-top-boundary)),
+    calc(var(--app-viewport-height) - 2 * var(--record-ring-bottom-boundary)),
+    var(--record-ring-max-size)
+  );
+  --bottom-nav-height: calc(96px + env(safe-area-inset-bottom, 0px));
+  --record-action-height: 76px;
   width: 100%;
   height: var(--app-viewport-height);
   min-height: 100vh;
@@ -197,6 +208,7 @@ body:not([data-view="home"]) .debug-build-badge {
   color: #3b4652;
   cursor: pointer;
   padding: 0;
+  transition: opacity 220ms ease;
 }
 
 .top-menu-btn span {
@@ -482,17 +494,10 @@ body:not([data-view="home"]) .debug-build-badge {
 }
 
 .gauge-orb {
-  --record-ring-top-boundary: calc(176px + env(safe-area-inset-top, 0px));
-  --record-ring-bottom-boundary: calc(112px + env(safe-area-inset-bottom, 0px));
   position: fixed;
   left: 50%;
   top: calc(var(--app-viewport-height) / 2);
-  width: min(
-    calc(100vw - 20px),
-    calc(var(--app-viewport-height) - 2 * var(--record-ring-top-boundary)),
-    calc(var(--app-viewport-height) - 2 * var(--record-ring-bottom-boundary)),
-    760px
-  );
+  width: var(--record-ring-size);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -578,6 +583,7 @@ body:not([data-view="home"]) .debug-build-badge {
   width: 124%;
   aspect-ratio: 1;
   overflow: visible;
+  transition: opacity 240ms ease;
 }
 
 .gauge-reference,
@@ -672,6 +678,74 @@ body:not([data-view="home"]) .debug-build-badge {
   transition: text-shadow 0.28s ease, transform 0.28s ease;
 }
 
+.quick-expense-field {
+  display: none;
+  width: 100%;
+  margin-top: 8px;
+  color: #303842;
+  font-size: clamp(3.2rem, 15vw, 4.25rem);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.quick-expense-field span {
+  display: inline;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+}
+
+.quick-expense-field input {
+  width: 3.2em;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+  outline: none;
+  padding: 0;
+}
+
+.quick-expense-field input::placeholder {
+  color: rgba(48, 56, 66, 0.54);
+}
+
+.quick-expense-field input::-webkit-outer-spin-button,
+.quick-expense-field input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.quick-expense-field input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+body.quick-expense-mode .gauge-center strong {
+  outline: none;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+body.quick-expense-mode .gauge-center strong::before {
+  content: "¥ ";
+}
+
+body.quick-expense-mode .gauge-center strong:empty::after {
+  content: attr(data-placeholder);
+  color: rgba(48, 56, 66, 0.54);
+}
+
 .gauge-center strong.is-animating {
   text-shadow:
     0 0 16px rgba(var(--page-accent-rgb), 0.14),
@@ -687,6 +761,7 @@ body:not([data-view="home"]) .debug-build-badge {
   color: var(--page-blue);
   font-size: 0.96rem;
   font-weight: 400;
+  transition: color 220ms ease, opacity 220ms ease;
 }
 
 .gauge-center span[data-action="open-settings"] {
@@ -708,6 +783,16 @@ body:not([data-view="home"]) .debug-build-badge {
   outline: none;
 }
 
+.gauge-center .quick-expense-field span {
+  display: inline;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+}
+
 .add-expense-btn {
   grid-area: 3 / 1;
   width: 76px;
@@ -724,6 +809,7 @@ body:not([data-view="home"]) .debug-build-badge {
     inset 0 1px 0 rgba(255, 255, 255, 0.38);
   cursor: pointer;
   padding: 0;
+  transition: opacity 220ms ease, transform 220ms ease, visibility 220ms ease;
 }
 
 .add-expense-btn span {
@@ -749,16 +835,86 @@ body:not([data-view="home"]) .debug-build-badge {
   transform: translate(-50%, -50%) rotate(90deg);
 }
 
+.quick-expense-continue-btn {
+  grid-area: 3 / 1;
+  position: absolute;
+  left: 50%;
+  bottom: calc(
+    var(--bottom-nav-height)
+    + (
+      var(--app-viewport-height)
+      - var(--bottom-nav-height)
+      - ((var(--app-viewport-height) + var(--record-ring-size)) / 2)
+      - var(--record-action-height)
+    ) / 2
+  );
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #3f7665, #285646);
+  color: #fff;
+  padding: 0;
+  box-shadow:
+    0 10px 24px rgba(47, 93, 79, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transform: translateX(-50%);
+  z-index: 11;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 220ms ease, visibility 220ms ease;
+}
+
+.quick-expense-continue-btn svg {
+  width: 52%;
+  aspect-ratio: 1;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.quick-expense-continue-btn:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.quick-expense-continue-btn:focus-visible {
+  outline: 3px solid rgba(var(--page-accent-rgb), 0.22);
+  outline-offset: 4px;
+}
+
 .record-action-dock {
   grid-area: 3 / 1;
-  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: calc(
+    var(--bottom-nav-height)
+    + (
+      var(--app-viewport-height)
+      - var(--bottom-nav-height)
+      - ((var(--app-viewport-height) + var(--record-ring-size)) / 2)
+      - var(--record-action-height)
+    ) / 2
+  );
+  display: flex;
   justify-self: center;
   align-self: center;
   justify-content: center;
   align-items: center;
   gap: clamp(34px, 12vw, 72px);
-  height: 76px;
+  height: var(--record-action-height);
   z-index: 11;
+  transform: translateX(-50%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 220ms ease, visibility 220ms ease;
 }
 
 .record-status {
@@ -778,6 +934,46 @@ body:not([data-view="home"]) .debug-build-badge {
 
 body:not([data-mode="record"]) .record-status {
   display: none;
+}
+
+body.quick-expense-mode .budget-gauge,
+body.quick-expense-mode .add-expense-btn {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.quick-expense-mode .gauge-center #usageText {
+  color: transparent;
+  pointer-events: none;
+}
+
+body.quick-expense-mode .quick-expense-continue-btn {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+body.quick-expense-mode .quick-expense-continue-btn:disabled {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+body.quick-expense-mode .gauge-center {
+  pointer-events: auto;
+}
+
+body.quick-expense-mode .top-menu-btn {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.quick-expense-mode .bottom-nav {
+  position: absolute;
+}
+
+body.quick-expense-committing .home-gauge-content,
+body.quick-expense-committing .gauge-center {
+  transition: none;
 }
 
 body[data-mode="record"] .home-head-content,
@@ -815,17 +1011,14 @@ body[data-mode="record"] .record-gauge-content {
 }
 
 body[data-mode="record"] .record-action-dock {
-  display: flex;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
-  body[data-mode="record"] .gauge-orb {
-    width: min(
-      calc(100vw - 20px),
-      calc(var(--app-viewport-height) - 2 * var(--record-ring-top-boundary)),
-      calc(var(--app-viewport-height) - 2 * var(--record-ring-bottom-boundary)),
-      760px
-    );
-  }
+body[data-mode="record"] .gauge-orb {
+  width: var(--record-ring-size);
+}
 
 body[data-mode="record"] .top-menu-btn {
   opacity: 0;
@@ -1822,13 +2015,18 @@ body.keyboard-open .settings-modal.is-page-view {
 .history-tab {
   position: relative;
   z-index: 1;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   border-radius: 999px;
-  padding: 10px 14px;
+  padding: 0 14px;
   background: transparent;
   color: var(--history-muted-text);
   cursor: pointer;
   font: inherit;
+  line-height: 38px;
   transition: color 220ms ease;
 }
 
@@ -1985,6 +2183,14 @@ body.keyboard-open .settings-modal.is-page-view {
   color: var(--page-blue);
   cursor: pointer;
   padding: 0;
+  touch-action: manipulation;
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.history-edit-btn.is-delete-mode {
+  background: rgba(232, 65, 86, 0.14);
+  color: #e84156;
+  transform: scale(1.04);
 }
 
 .history-edit-btn svg {
@@ -2959,8 +3165,61 @@ body.keyboard-open .settings-modal.is-page-view {
   font-weight: 700;
 }
 
+.expense-btn.danger {
+  background: linear-gradient(135deg, #df5f68, #b83c47);
+  color: #fff;
+  font-weight: 700;
+}
+
+.delete-confirm-modal {
+  z-index: 28;
+  color: var(--page-text);
+}
+
+.delete-confirm-card {
+  width: min(92vw, 340px);
+  padding: 24px;
+  border: 1px solid rgba(136, 151, 170, 0.14);
+  background:
+    radial-gradient(circle at 20% 10%, rgba(var(--page-accent-rgb), 0.08), transparent 32%),
+    rgba(255, 255, 255, 0.94);
+  color: var(--page-text);
+  box-shadow: 0 24px 70px rgba(64, 83, 107, 0.2);
+  overflow: hidden;
+}
+
+.delete-confirm-card .expense-kicker {
+  color: var(--page-blue);
+}
+
+.delete-confirm-card h2 {
+  color: var(--page-text);
+}
+
+.delete-confirm-text {
+  margin: 12px 0 0;
+  color: var(--page-muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.delete-confirm-actions {
+  margin-top: 22px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.delete-confirm-actions .expense-btn.ghost {
+  background: rgba(52, 67, 86, 0.08);
+  color: var(--page-text);
+}
+
 @media (max-width: 640px) {
   .gauge-page {
+    --record-ring-top-boundary: calc(166px + env(safe-area-inset-top, 0px));
+    --record-ring-bottom-boundary: calc(106px + env(safe-area-inset-bottom, 0px));
+    --record-ring-max-size: 720px;
+    --bottom-nav-height: calc(88px + env(safe-area-inset-bottom, 0px));
+    --record-action-height: 72px;
     padding:
       calc(34px + env(safe-area-inset-top, 0px))
       calc(10px + env(safe-area-inset-right, 0px))
@@ -2970,14 +3229,7 @@ body.keyboard-open .settings-modal.is-page-view {
   }
 
   .gauge-orb {
-    --record-ring-top-boundary: calc(166px + env(safe-area-inset-top, 0px));
-    --record-ring-bottom-boundary: calc(106px + env(safe-area-inset-bottom, 0px));
-    width: min(
-      calc(100vw - 20px),
-      calc(var(--app-viewport-height) - 2 * var(--record-ring-top-boundary)),
-      calc(var(--app-viewport-height) - 2 * var(--record-ring-bottom-boundary)),
-      720px
-    );
+    width: var(--record-ring-size);
   }
 
   .expense-page-card {
@@ -3008,14 +3260,7 @@ body.keyboard-open .settings-modal.is-page-view {
   }
 
   body[data-mode="record"] .gauge-orb {
-    --record-ring-top-boundary: calc(166px + env(safe-area-inset-top, 0px));
-    --record-ring-bottom-boundary: calc(106px + env(safe-area-inset-bottom, 0px));
-    width: min(
-      calc(100vw - 20px),
-      calc(var(--app-viewport-height) - 2 * var(--record-ring-top-boundary)),
-      calc(var(--app-viewport-height) - 2 * var(--record-ring-bottom-boundary)),
-      720px
-    );
+    width: var(--record-ring-size);
     margin-top: 0;
   }
 
@@ -3025,7 +3270,7 @@ body.keyboard-open .settings-modal.is-page-view {
   }
 
   .record-action-dock {
-    height: 72px;
+    height: var(--record-action-height);
   }
 
   .top-menu-btn {
@@ -3042,11 +3287,17 @@ body.keyboard-open .settings-modal.is-page-view {
     height: 72px;
   }
 
+  .quick-expense-continue-btn {
+    width: 68px;
+    height: 68px;
+  }
+
   .gauge-center {
     width: 60%;
   }
 
-  .gauge-center strong {
+  .gauge-center strong,
+  .quick-expense-field {
     font-size: clamp(3rem, 14vw, 4rem);
   }
 
@@ -3094,6 +3345,10 @@ body.keyboard-open .settings-modal.is-page-view {
 
 @media (orientation: landscape) and (max-height: 640px) {
   .gauge-page {
+    --record-ring-top-boundary: calc(18px + env(safe-area-inset-top, 0px));
+    --record-ring-bottom-boundary: calc(18px + env(safe-area-inset-bottom, 0px));
+    --record-ring-size: min(calc(100vw - 170px), calc(var(--app-viewport-height) - 96px), 680px);
+    --record-action-height: clamp(48px, calc(var(--app-viewport-unit) * 13), 64px);
     padding:
       calc(24px + env(safe-area-inset-top, 0px))
       calc(72px + env(safe-area-inset-right, 0px))
@@ -3119,9 +3374,7 @@ body.keyboard-open .settings-modal.is-page-view {
   }
 
   .gauge-orb {
-    --record-ring-top-boundary: calc(18px + env(safe-area-inset-top, 0px));
-    --record-ring-bottom-boundary: calc(18px + env(safe-area-inset-bottom, 0px));
-    width: min(calc(100vw - 170px), calc(var(--app-viewport-height) - 96px), 680px);
+    width: var(--record-ring-size);
   }
 
   .expense-page-card {
@@ -3158,9 +3411,7 @@ body.keyboard-open .settings-modal.is-page-view {
   }
 
   body[data-mode="record"] .gauge-orb {
-    --record-ring-top-boundary: calc(18px + env(safe-area-inset-top, 0px));
-    --record-ring-bottom-boundary: calc(18px + env(safe-area-inset-bottom, 0px));
-    width: min(calc(100vw - 170px), calc(var(--app-viewport-height) - 96px), 680px);
+    width: var(--record-ring-size);
     margin-top: 0;
   }
 
@@ -3182,14 +3433,15 @@ body.keyboard-open .settings-modal.is-page-view {
   }
 
   .record-action-dock {
-    height: clamp(48px, calc(var(--app-viewport-unit) * 13), 64px);
+    height: var(--record-action-height);
   }
 
   .gauge-center {
     width: 56%;
   }
 
-  .gauge-center strong {
+  .gauge-center strong,
+  .quick-expense-field {
     font-size: clamp(2rem, calc(var(--app-viewport-unit) * 10), 3.2rem);
   }
 
@@ -3208,6 +3460,11 @@ body.keyboard-open .settings-modal.is-page-view {
     width: clamp(48px, calc(var(--app-viewport-unit) * 13), 64px);
     height: clamp(48px, calc(var(--app-viewport-unit) * 13), 64px);
     transform: none;
+  }
+
+  .quick-expense-continue-btn {
+    width: clamp(48px, calc(var(--app-viewport-unit) * 13), 64px);
+    height: clamp(48px, calc(var(--app-viewport-unit) * 13), 64px);
   }
 
   .add-expense-btn span,

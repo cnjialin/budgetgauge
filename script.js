@@ -90,9 +90,17 @@ const historyCard = document.querySelector(".history-card");
 const historyFilter = document.querySelector(".history-filter");
 const deleteConfirmModal = document.querySelector("#deleteConfirmModal");
 const deleteConfirmBackdrop = document.querySelector("#deleteConfirmBackdrop");
+const deleteConfirmKicker = document.querySelector("#deleteConfirmKicker");
+const deleteConfirmTitle = document.querySelector("#deleteConfirmTitle");
 const deleteConfirmText = document.querySelector("#deleteConfirmText");
 const cancelDeleteExpenseBtn = document.querySelector("#cancelDeleteExpenseBtn");
 const confirmDeleteExpenseBtn = document.querySelector("#confirmDeleteExpenseBtn");
+const categoryAddModal = document.querySelector("#categoryAddModal");
+const categoryAddBackdrop = document.querySelector("#categoryAddBackdrop");
+const categoryAddInput = document.querySelector("#categoryAddInput");
+const categoryAddStatus = document.querySelector("#categoryAddStatus");
+const cancelCategoryAddBtn = document.querySelector("#cancelCategoryAddBtn");
+const confirmCategoryAddBtn = document.querySelector("#confirmCategoryAddBtn");
 const debugBuildBadge = document.querySelector("#debugBuildBadge");
 const releaseInfoModal = document.querySelector("#releaseInfoModal");
 const releaseInfoBackdrop = document.querySelector("#releaseInfoBackdrop");
@@ -130,6 +138,8 @@ let isHistorySwipeActive = false;
 let historyDeleteHoldTimer = 0;
 let historyDeleteSuppressClick = false;
 let pendingDeleteExpenseRecord = null;
+let pendingDeleteCategoryPath = null;
+let pendingAddCategoryParentPath = null;
 let selectedPurpose = "";
 let selectedCategoryPath = [];
 let currentCategoryNodes = [];
@@ -140,6 +150,7 @@ let currentSession = null;
 let displayedRemaining = null;
 let remainingAnimationFrame = 0;
 let stagedGaugeAnimationFrame = 0;
+let gaugeAnimationToken = 0;
 let hasPlayedInitialGaugeAnimation = false;
 let shouldReplayGaugeAnimationOnVisible = false;
 let supabase = createSupabaseClient(supabaseUrl, supabaseKey);
@@ -340,7 +351,11 @@ async function initialize() {
   historyBackdrop.addEventListener("click", closeHistoryModal);
   deleteConfirmBackdrop.addEventListener("click", closeDeleteConfirmModal);
   cancelDeleteExpenseBtn.addEventListener("click", closeDeleteConfirmModal);
-  confirmDeleteExpenseBtn.addEventListener("click", confirmPendingDeleteExpenseRecord);
+  confirmDeleteExpenseBtn.addEventListener("click", confirmPendingDelete);
+  categoryAddBackdrop.addEventListener("click", closeCategoryAddModal);
+  cancelCategoryAddBtn.addEventListener("click", closeCategoryAddModal);
+  confirmCategoryAddBtn.addEventListener("click", confirmPendingAddCategory);
+  categoryAddInput.addEventListener("keydown", handleCategoryAddInputKeydown);
   historyTodayBtn.addEventListener("click", () => setHistoryRange("today"));
   historyMonthBtn.addEventListener("click", () => setHistoryRange("month"));
   historyCard.addEventListener("touchstart", handleHistorySwipeStart, { passive: true });
@@ -537,6 +552,7 @@ function scrollFocusedControlIntoView(control) {
 }
 
 function openExpenseModal(options = {}) {
+  stopGaugeAmountAnimation();
   const editRecord = options.editRecord || null;
   const initialAmount = editRecord ? "" : formatOptionalNumberInput(sanitizeNumber(options.initialAmount));
   const shouldCloseQuickAfterRecordMode = isQuickExpenseMode;
@@ -573,7 +589,7 @@ function closeExpenseModal(options = {}) {
     delete document.body.dataset.mode;
   }
   if (options.render !== false) {
-    renderGauge();
+    renderGaugeState(false);
   }
   if (options.focus !== false) {
     openExpenseModalBtn.focus();
@@ -585,6 +601,7 @@ function openQuickExpenseEntry() {
     return;
   }
 
+  stopGaugeAmountAnimation();
   isQuickExpenseMode = true;
   document.body.classList.add("quick-expense-mode");
   centerLabelEl.textContent = "消费";
@@ -619,7 +636,7 @@ function closeQuickExpenseEntry(options = {}) {
   centerLabelEl.textContent = "今日剩余";
 
   if (options.render !== false) {
-    renderGauge();
+    renderGaugeState(false);
   }
 
   if (options.focus) {
@@ -1052,6 +1069,7 @@ function openReleaseInfoModal(options = {}) {
 }
 
 function closeReleaseInfoModal(options = {}) {
+  closeCategoryAddModal();
   hidePageView(releaseInfoModal, options);
   releaseInfoModal.querySelector(".release-info-card")?.setAttribute("role", "dialog");
   releaseInfoModal.querySelector(".release-info-card")?.setAttribute("aria-modal", "true");
@@ -1776,7 +1794,7 @@ function handleCategorySettingsClick(event) {
     }
 
     if (button.dataset.categoryAction === "delete") {
-      deleteCategoryAtPath(path);
+      confirmDeleteCategoryAtPath(path);
     }
     return;
   }
@@ -1881,14 +1899,46 @@ async function promptAddCategory(parentPath) {
     return;
   }
 
-  const label = window.prompt("输入新分类名称");
-  const normalizedLabel = label?.trim();
+  pendingAddCategoryParentPath = [...parentPath];
+  categoryAddInput.value = "";
+  categoryAddStatus.textContent = "";
+  categoryAddModal.hidden = false;
+  requestAnimationFrame(() => {
+    categoryAddInput.focus({ preventScroll: true });
+  });
+}
+
+function closeCategoryAddModal() {
+  pendingAddCategoryParentPath = null;
+  categoryAddModal.hidden = true;
+  categoryAddStatus.textContent = "";
+}
+
+function handleCategoryAddInputKeydown(event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    confirmPendingAddCategory();
+  }
+}
+
+async function confirmPendingAddCategory() {
+  const parentPath = pendingAddCategoryParentPath;
+  if (!Array.isArray(parentPath)) {
+    closeCategoryAddModal();
+    return;
+  }
+
+  const normalizedLabel = categoryAddInput.value.trim();
   if (!normalizedLabel) {
+    categoryAddStatus.textContent = "请输入分类名称。";
+    categoryAddInput.focus();
     return;
   }
 
   const siblings = getMutableCategoryChildren(parentPath);
   if (!siblings || siblings.some((category) => category.label === normalizedLabel)) {
+    categoryAddStatus.textContent = "这个分类已经存在。";
+    categoryAddInput.focus();
     return;
   }
 
@@ -1905,6 +1955,7 @@ async function promptAddCategory(parentPath) {
   if (currentSession) {
     const savedCategory = await persistCategoryToSupabase(nextCategory, parent, siblings.length);
     if (!savedCategory) {
+      categoryAddStatus.textContent = "分类添加失败，请稍后重试。";
       return;
     }
     Object.assign(nextCategory, savedCategory);
@@ -1915,11 +1966,13 @@ async function promptAddCategory(parentPath) {
     categorySettingsOpenKeys.add(getCategorySettingsOpenKey(nextCategory, [...parentPath, siblings.length - 1]));
   }
   if (currentSession && !(await syncCategorySortOrderToSupabase())) {
+    categoryAddStatus.textContent = "分类排序同步失败，请稍后重试。";
     return;
   }
   saveExpenseCategories();
   renderCategorySettings();
   resetCategoryState();
+  closeCategoryAddModal();
 }
 
 async function deleteCategoryAtPath(path) {
@@ -1942,6 +1995,24 @@ async function deleteCategoryAtPath(path) {
   saveExpenseCategories();
   renderCategorySettings();
   resetCategoryState();
+}
+
+function confirmDeleteCategoryAtPath(path) {
+  const category = getMutableCategoryByPath(path);
+  if (!category) {
+    return;
+  }
+
+  const childCount = Array.isArray(category.children) ? category.children.length : 0;
+  pendingDeleteCategoryPath = [...path];
+  pendingDeleteExpenseRecord = null;
+  deleteConfirmKicker.textContent = "Delete Category";
+  deleteConfirmTitle.textContent = "删除这个分类？";
+  deleteConfirmText.textContent = childCount
+    ? `${category.label} · 将同时删除 ${childCount} 个下级分类`
+    : category.label;
+  deleteConfirmModal.hidden = false;
+  confirmDeleteExpenseBtn.focus();
 }
 
 function parseCategoryPath(value) {
@@ -2600,6 +2671,11 @@ function handleDocumentKeydown(event) {
     return;
   }
 
+  if (event.key === "Escape" && !categoryAddModal.hidden) {
+    closeCategoryAddModal();
+    return;
+  }
+
   if (event.key === "Escape" && !releaseInfoModal.hidden) {
     closeReleaseInfoModal();
   }
@@ -2878,6 +2954,7 @@ function playInitialGaugeAnimation() {
 }
 
 function renderGaugeState(animate = true, fromFull = false) {
+  const animationToken = ++gaugeAnimationToken;
   const budget = getBudgetSnapshot();
   const limit = budget.fixedDailyBudget;
   const referenceValue = budget.todayTotalBudget;
@@ -2919,7 +2996,17 @@ function renderGaugeState(animate = true, fromFull = false) {
     remainingBudgetEl.getBoundingClientRect();
     gaugeValuePath.style.transition = previousTransition;
     stagedGaugeAnimationFrame = requestAnimationFrame(() => {
+      if (animationToken !== gaugeAnimationToken || isExpenseMode || isQuickExpenseMode) {
+        stagedGaugeAnimationFrame = 0;
+        return;
+      }
+
       stagedGaugeAnimationFrame = requestAnimationFrame(() => {
+        if (animationToken !== gaugeAnimationToken || isExpenseMode || isQuickExpenseMode) {
+          stagedGaugeAnimationFrame = 0;
+          return;
+        }
+
         stagedGaugeAnimationFrame = 0;
         setGaugeValueProgress(pathLength, ratio);
         gaugeValuePath.classList.toggle("warning", isWarning);
@@ -3355,6 +3442,9 @@ async function confirmDeleteExpenseRecord(item) {
   }
 
   pendingDeleteExpenseRecord = item;
+  pendingDeleteCategoryPath = null;
+  deleteConfirmKicker.textContent = "Delete Expense";
+  deleteConfirmTitle.textContent = "删除这笔消费？";
   deleteConfirmText.textContent = `${formatCurrency(Number(item.amount || 0))} · ${getPurposeLabel(item)}`;
   deleteConfirmModal.hidden = false;
   confirmDeleteExpenseBtn.focus();
@@ -3362,13 +3452,18 @@ async function confirmDeleteExpenseRecord(item) {
 
 function closeDeleteConfirmModal() {
   pendingDeleteExpenseRecord = null;
+  pendingDeleteCategoryPath = null;
   deleteConfirmModal.hidden = true;
 }
 
-async function confirmPendingDeleteExpenseRecord() {
+async function confirmPendingDelete() {
   const record = pendingDeleteExpenseRecord;
+  const categoryPath = pendingDeleteCategoryPath;
   if (!record) {
     closeDeleteConfirmModal();
+    if (Array.isArray(categoryPath)) {
+      await deleteCategoryAtPath(categoryPath);
+    }
     return;
   }
 
@@ -3653,12 +3748,30 @@ async function deleteExpenseFromSupabase(record) {
   return true;
 }
 
-function animateRemainingBudget(targetValue, animate = true) {
-  const nextValue = Number.isFinite(targetValue) ? targetValue : 0;
+function stopGaugeAmountAnimation() {
+  gaugeAnimationToken += 1;
+
+  if (stagedGaugeAnimationFrame) {
+    cancelAnimationFrame(stagedGaugeAnimationFrame);
+    stagedGaugeAnimationFrame = 0;
+  }
 
   if (remainingAnimationFrame) {
     cancelAnimationFrame(remainingAnimationFrame);
     remainingAnimationFrame = 0;
+  }
+
+  remainingBudgetEl.classList.remove("is-animating");
+}
+
+function animateRemainingBudget(targetValue, animate = true) {
+  const nextValue = Number.isFinite(targetValue) ? targetValue : 0;
+
+  stopGaugeAmountAnimation();
+  const animationToken = gaugeAnimationToken;
+
+  if (isExpenseMode || isQuickExpenseMode) {
+    return;
   }
 
   if (displayedRemaining === null) {
@@ -3697,6 +3810,12 @@ function animateRemainingBudget(targetValue, animate = true) {
   remainingBudgetEl.classList.add("is-animating");
 
   const step = (now) => {
+    if (animationToken !== gaugeAnimationToken || isExpenseMode || isQuickExpenseMode) {
+      remainingAnimationFrame = 0;
+      remainingBudgetEl.classList.remove("is-animating");
+      return;
+    }
+
     const elapsed = Math.min(now - startedAt, duration);
     const traveled = getTraveledAmount(elapsed, {
       distance,

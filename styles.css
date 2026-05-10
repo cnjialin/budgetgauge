@@ -220,6 +220,21 @@ body:not([data-view="home"]) .debug-build-badge {
   transition: transform 220ms ease, opacity 220ms ease;
 }
 
+.top-menu-btn span:nth-child(2) {
+  width: 21px;
+  justify-self: end;
+}
+
+.top-menu-btn span:nth-child(3) {
+  width: 16px;
+  justify-self: end;
+}
+
+.top-menu-btn.is-active span {
+  width: 26px;
+  justify-self: center;
+}
+
 .top-menu-btn.is-active span:nth-child(1) {
   transform: translateY(9px) rotate(45deg);
 }
@@ -962,11 +977,6 @@ body.quick-expense-mode .gauge-center {
   pointer-events: auto;
 }
 
-body.quick-expense-mode .top-menu-btn {
-  opacity: 0;
-  pointer-events: none;
-}
-
 body.quick-expense-mode .bottom-nav {
   position: absolute;
 }
@@ -1018,11 +1028,6 @@ body[data-mode="record"] .record-action-dock {
 
 body[data-mode="record"] .gauge-orb {
   width: var(--record-ring-size);
-}
-
-body[data-mode="record"] .top-menu-btn {
-  opacity: 0;
-  pointer-events: none;
 }
 
 .bottom-nav {
@@ -3171,12 +3176,14 @@ body.keyboard-open .settings-modal.is-page-view {
   font-weight: 700;
 }
 
-.delete-confirm-modal {
+.delete-confirm-modal,
+.category-add-modal {
   z-index: 28;
   color: var(--page-text);
 }
 
-.delete-confirm-card {
+.delete-confirm-card,
+.category-add-card {
   width: min(92vw, 340px);
   padding: 24px;
   border: 1px solid rgba(136, 151, 170, 0.14);
@@ -3188,12 +3195,46 @@ body.keyboard-open .settings-modal.is-page-view {
   overflow: hidden;
 }
 
-.delete-confirm-card .expense-kicker {
+.delete-confirm-card .expense-kicker,
+.category-add-card .expense-kicker {
   color: var(--page-blue);
 }
 
-.delete-confirm-card h2 {
+.delete-confirm-card h2,
+.category-add-card h2 {
   color: var(--page-text);
+}
+
+.category-add-field {
+  margin-top: 14px;
+}
+
+.category-add-field span {
+  color: var(--page-muted);
+}
+
+.category-add-field input {
+  min-height: 48px;
+  border-color: rgba(var(--page-accent-rgb), 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--page-title);
+  text-align: center;
+  box-shadow: 0 12px 24px rgba(48, 56, 66, 0.06);
+}
+
+.category-add-field input:focus {
+  border-color: rgba(var(--page-accent-rgb), 0.34);
+  box-shadow:
+    0 12px 24px rgba(48, 56, 66, 0.06),
+    0 0 0 3px rgba(var(--page-accent-rgb), 0.12);
+}
+
+.category-add-card .modal-status {
+  min-height: 1.4em;
+  margin-top: 10px;
+  color: #b83c47;
+  text-align: center;
 }
 
 .delete-confirm-text {
@@ -3203,12 +3244,14 @@ body.keyboard-open .settings-modal.is-page-view {
   line-height: 1.5;
 }
 
-.delete-confirm-actions {
+.delete-confirm-actions,
+.category-add-actions {
   margin-top: 22px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.delete-confirm-actions .expense-btn.ghost {
+.delete-confirm-actions .expense-btn.ghost,
+.category-add-actions .expense-btn.ghost {
   background: rgba(52, 67, 86, 0.08);
   color: var(--page-text);
 }

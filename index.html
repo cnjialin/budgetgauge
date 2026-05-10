@@ -114,11 +114,6 @@
     <button id="openExpenseModalBtn" class="add-expense-btn" type="button" aria-label="记录一笔消费">
       <span aria-hidden="true"></span>
     </button>
-    <button id="quickExpenseContinueBtn" class="quick-expense-continue-btn" type="button" aria-label="继续选择消费分类" disabled>
-      <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
-        <path d="M5.5 12.6 9.8 16.9 18.8 7.6"></path>
-      </svg>
-    </button>
     <div class="record-action-dock" aria-label="记录操作">
       <button id="cancelExpenseBtn" class="expense-round-btn cancel" type="button" aria-label="取消">
         <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
@@ -135,19 +130,19 @@
     <p id="expenseStatus" class="record-status" aria-live="polite"></p>
 
     <nav class="bottom-nav" aria-label="主导航">
-      <button id="homeTabBtn" class="bottom-nav-btn active" type="button" aria-label="首页" aria-current="page">
-        <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
-          <path d="M4 10.7 12 4l8 6.7v8.1a1.2 1.2 0 0 1-1.2 1.2h-4.3v-5.6h-5V20H5.2A1.2 1.2 0 0 1 4 18.8Z"></path>
-        </svg>
-        <span></span>
-      </button>
-
       <button id="openHistoryBtn" class="bottom-nav-btn" type="button" aria-controls="historyModal" aria-label="查看历史消费">
         <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
           <path d="M6 20V9.5"></path>
           <path d="M12 20V4"></path>
           <path d="M18 20v-7.5"></path>
         </svg>
+      </button>
+
+      <button id="homeTabBtn" class="bottom-nav-btn active" type="button" aria-label="首页" aria-current="page">
+        <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+          <path d="M4 10.7 12 4l8 6.7v8.1a1.2 1.2 0 0 1-1.2 1.2h-4.3v-5.6h-5V20H5.2A1.2 1.2 0 0 1 4 18.8Z"></path>
+        </svg>
+        <span></span>
       </button>
 
       <button id="bottomSettingsBtn" class="bottom-nav-btn" type="button" aria-controls="settingsModal" aria-label="打开设置">
@@ -276,12 +271,29 @@
   <div id="deleteConfirmModal" class="settings-modal delete-confirm-modal" hidden>
     <div id="deleteConfirmBackdrop" class="expense-backdrop"></div>
     <section class="settings-card delete-confirm-card" role="dialog" aria-modal="true" aria-labelledby="deleteConfirmTitle">
-      <p class="expense-kicker">Delete Expense</p>
+      <p id="deleteConfirmKicker" class="expense-kicker">Delete Expense</p>
       <h2 id="deleteConfirmTitle">删除这笔消费？</h2>
       <p id="deleteConfirmText" class="delete-confirm-text"></p>
       <div class="expense-actions delete-confirm-actions">
         <button id="cancelDeleteExpenseBtn" class="expense-btn ghost" type="button">取消</button>
         <button id="confirmDeleteExpenseBtn" class="expense-btn danger" type="button">删除</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="categoryAddModal" class="settings-modal category-add-modal" hidden>
+    <div id="categoryAddBackdrop" class="expense-backdrop"></div>
+    <section class="settings-card category-add-card" role="dialog" aria-modal="true" aria-labelledby="categoryAddTitle">
+      <p class="expense-kicker">New Category</p>
+      <h2 id="categoryAddTitle">添加分类</h2>
+      <label class="expense-field category-add-field">
+        <span>分类名称</span>
+        <input id="categoryAddInput" type="text" maxlength="20" placeholder="输入新分类名称">
+      </label>
+      <p id="categoryAddStatus" class="modal-status" aria-live="polite"></p>
+      <div class="expense-actions category-add-actions">
+        <button id="cancelCategoryAddBtn" class="expense-btn ghost" type="button">取消</button>
+        <button id="confirmCategoryAddBtn" class="expense-btn primary" type="button">添加</button>
       </div>
     </section>
   </div>

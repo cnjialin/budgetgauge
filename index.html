@@ -11,7 +11,6 @@
 </head>
 <body>
   <main class="gauge-page">
-    <p id="debugBuildBadge" class="debug-build-badge">beta</p>
     <button id="openSettingsBtn" class="top-menu-btn" type="button" aria-haspopup="dialog" aria-controls="releaseInfoModal" aria-expanded="false" aria-label="打开版本信息">
       <span></span>
       <span></span>
@@ -20,7 +19,7 @@
     <header class="gauge-head">
       <div class="home-head-content">
         <p class="gauge-kicker">Budget Cluster</p>
-        <p id="connectionStatus" class="connection-status">本地模式</p>
+        <p id="connectionStatus" class="connection-status">登录中</p>
       </div>
       <div class="record-head-content" aria-label="记录消费输入">
         <label class="record-amount-field">
@@ -333,8 +332,8 @@
           </div>
         </div>
         <div class="release-info-body">
+          <h3 id="releaseVersionTitle">当前版本</h3>
           <p class="release-info-row">
-            <span>当前版本</span>
             <strong id="currentVersionValue">v0.1.0</strong>
             <span id="releaseInfoStatus" class="release-info-status">当前已是最新版本</span>
           </p>

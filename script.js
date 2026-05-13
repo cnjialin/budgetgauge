@@ -101,7 +101,6 @@ const categoryAddInput = document.querySelector("#categoryAddInput");
 const categoryAddStatus = document.querySelector("#categoryAddStatus");
 const cancelCategoryAddBtn = document.querySelector("#cancelCategoryAddBtn");
 const confirmCategoryAddBtn = document.querySelector("#confirmCategoryAddBtn");
-const debugBuildBadge = document.querySelector("#debugBuildBadge");
 const releaseInfoModal = document.querySelector("#releaseInfoModal");
 const releaseInfoBackdrop = document.querySelector("#releaseInfoBackdrop");
 const closeReleaseInfoBtn = document.querySelector("#closeReleaseInfoBtn");
@@ -147,6 +146,9 @@ let currentCategoryPath = [];
 let currentCategoryDepth = 0;
 let categorySettingsOpenKeys = new Set();
 let currentSession = null;
+let isAuthHydrating = false;
+let hasCompletedInitialAuthHydration = false;
+let hasStartupExpenseHistory = false;
 let displayedRemaining = null;
 let remainingAnimationFrame = 0;
 let stagedGaugeAnimationFrame = 0;
@@ -323,6 +325,8 @@ async function initialize() {
   resetCategoryState();
   setHistoryRange(historyRange, false);
   setActiveMainView("home");
+  isAuthHydrating = Boolean(supabase);
+  updateConnectionStatus();
   setGaugeMode(false);
   disableDataScopeButton();
   setupKeyboardViewport();
@@ -577,7 +581,7 @@ function openExpenseModal(options = {}) {
   expensePurposeInput.value = editRecord ? formatCategoryPathInput(getRecordPurposeList(editRecord)) : "";
   expenseStatus.textContent = editRecord
     ? "正在修改这笔消费"
-    : currentSession ? "" : "当前未连接 Supabase，保存将只写入本地历史";
+    : currentSession ? "" : "当前未登录，保存将只写入本地历史";
   resetCategoryState();
 }
 
@@ -918,7 +922,7 @@ function openSettingsModal(mode = "full", options = {}) {
     ? "设置每月总额度"
     : mode === "connection"
       ? "设置 Supabase 连接信息"
-      : currentSession ? "已连接 Supabase" : "默认使用本地模式，如需同步可在这里登录";
+      : currentSession ? "已连接 Supabase" : "当前未登录，请在这里登录同步数据";
 
   if (isBudgetOnlySettingsMode) {
     return;
@@ -1050,11 +1054,13 @@ function openReleaseInfoModal(options = {}) {
 
   if (latestReleaseInfo?.downloadUrl) {
     releaseInfoStatus.innerHTML = `发现新版本 <strong>${escapeHtml(latestReleaseInfo.tag)}</strong>，前往更新`;
+    releaseInfoStatus.classList.add("is-update");
     releaseGithubLink.href = latestReleaseInfo.downloadUrl;
     releaseBaiduLink.href = "https://pan.baidu.com/s/1zKfk8u8o7KXZt4xQrNx8Dg?pwd=6666";
     releaseDownloadChoices.hidden = false;
   } else {
-      releaseInfoStatus.textContent = "当前已是最新版本";
+    releaseInfoStatus.textContent = "当前已是最新版本";
+    releaseInfoStatus.classList.remove("is-update");
     releaseDownloadChoices.hidden = true;
   }
 
@@ -1117,12 +1123,12 @@ async function confirmExpense() {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(expenseHistory));
   }
 
+  expenseStatus.textContent = "";
+  closeExpenseModal({ render: false });
   renderGauge();
   if (!historyModal.hidden) {
     renderHistory();
   }
-  expenseStatus.textContent = "";
-  closeExpenseModal({ render: false });
 
   if (currentSession) {
     const saved = await persistExpenseToSupabase(optimisticRecord, {
@@ -1202,7 +1208,7 @@ async function saveSettings() {
     expenseCategories = loadExpenseCategories();
     resetCategoryState();
     renderGauge();
-    settingsStatus.textContent = shouldAttemptSignIn ? "设置已保存，但 Supabase 登录失败" : "已保存到本地，当前为本地模式";
+    settingsStatus.textContent = shouldAttemptSignIn ? "设置已保存，但 Supabase 登录失败" : "已保存，当前未登录";
   }
 
   closeSettingsModal();
@@ -1235,20 +1241,26 @@ async function signOutToLocalMode() {
     renderHistory();
   }
 
-  settingsStatus.textContent = "已退出账号，当前为本地模式";
+  settingsStatus.textContent = "已退出账号，当前未登录";
   logoutSettingsBtn.disabled = false;
   closeSettingsModal();
 }
 
 async function hydrateSupabaseState() {
+  isAuthHydrating = Boolean(supabase);
+  updateConnectionStatus();
+
   if (!supabase) {
     currentSession = null;
+    isAuthHydrating = false;
+    hasCompletedInitialAuthHydration = true;
     expenseCategories = loadExpenseCategories();
     resetCategoryState();
     expenseHistory = loadHistory();
     scheduleMonthHistorySummaryForCurrentData();
     updateConnectionStatus();
     disableDataScopeButton();
+    renderGaugeState(false);
     return;
   }
 
@@ -1261,28 +1273,37 @@ async function hydrateSupabaseState() {
       localStorage.setItem(EMAIL_KEY, email);
     }
 
-    updateConnectionStatus();
     disableDataScopeButton();
 
-      if (currentSession) {
-        await refreshExpenseCategories();
-        await refreshExpenses("month", { animate: true, fromFull: false });
-        return;
-      }
-
-      expenseCategories = loadExpenseCategories();
-      resetCategoryState();
-      expenseHistory = loadHistory();
-      scheduleMonthHistorySummaryForCurrentData();
-    } catch {
-      currentSession = null;
-      expenseCategories = loadExpenseCategories();
-      resetCategoryState();
-      expenseHistory = loadHistory();
-      scheduleMonthHistorySummaryForCurrentData();
+    if (currentSession) {
+      isAuthHydrating = false;
+      hasCompletedInitialAuthHydration = true;
       updateConnectionStatus();
-      disableDataScopeButton();
+      await refreshExpenseCategories();
+      await refreshExpenses("month", { animate: true, fromFull: false });
+      return;
     }
+
+    isAuthHydrating = false;
+    hasCompletedInitialAuthHydration = true;
+    expenseCategories = loadExpenseCategories();
+    resetCategoryState();
+    expenseHistory = loadHistory();
+    scheduleMonthHistorySummaryForCurrentData();
+    updateConnectionStatus();
+    renderGaugeState(false);
+  } catch {
+    currentSession = null;
+    isAuthHydrating = false;
+    hasCompletedInitialAuthHydration = true;
+    expenseCategories = loadExpenseCategories();
+    resetCategoryState();
+    expenseHistory = loadHistory();
+    scheduleMonthHistorySummaryForCurrentData();
+    updateConnectionStatus();
+    disableDataScopeButton();
+    renderGaugeState(false);
+  }
 }
 
 async function signIn(nextEmail, nextPassword, showStatus = true) {
@@ -1384,10 +1405,6 @@ async function checkForAppUpdate() {
   }
 }
 
-function handleReleaseBadgeClick() {
-  openReleaseInfoModal();
-}
-
 function normalizeReleaseVersion(tag) {
   return tag
     .trim()
@@ -1410,16 +1427,6 @@ function parseRemotePackageVersion(source) {
 function applyReleaseBadgeState(releaseInfo) {
   const hasUpdate = Boolean(releaseInfo?.downloadUrl);
 
-  debugBuildBadge.textContent = hasUpdate ? "new" : "beta";
-  debugBuildBadge.classList.toggle("is-update", hasUpdate);
-  debugBuildBadge.setAttribute("role", "button");
-  debugBuildBadge.setAttribute("tabindex", "0");
-  debugBuildBadge.setAttribute(
-    "aria-label",
-    hasUpdate
-      ? `发现新版本 ${releaseInfo.tag}，点击查看版本信息`
-      : "点击查看当前版本",
-  );
   openSettingsBtn.classList.toggle("is-update", hasUpdate);
   openSettingsBtn.setAttribute(
     "aria-label",
@@ -1875,13 +1882,13 @@ async function syncCategoriesFromMenu() {
   syncCategoriesBtn.disabled = true;
   syncCategoriesBtn.classList.add("is-syncing");
   const previousStatus = releaseInfoStatus.textContent;
-  releaseInfoStatus.textContent = currentSession ? "正在同步云端分类..." : "当前为本地模式，已刷新本地分类";
+  releaseInfoStatus.textContent = currentSession ? "正在同步云端分类..." : "当前未登录，已刷新本地分类";
 
   try {
     const synced = await refreshExpenseCategories();
     releaseInfoStatus.textContent = currentSession
       ? synced ? "云端分类已同步" : "云端分类同步失败"
-      : "当前为本地模式，已刷新本地分类";
+      : "当前未登录，已刷新本地分类";
   } finally {
     syncCategoriesBtn.disabled = false;
     syncCategoriesBtn.classList.remove("is-syncing");
@@ -2953,6 +2960,25 @@ function playInitialGaugeAnimation() {
   renderGaugeState(true, true);
 }
 
+function shouldShowAuthGaugePlaceholder() {
+  return (isAuthHydrating && !hasStartupExpenseHistory)
+    || (hasCompletedInitialAuthHydration && !currentSession);
+}
+
+function renderAuthGaugePlaceholder(pathLength) {
+  gaugeReferencePath.style.strokeDasharray = `${pathLength}`;
+  gaugeReferencePath.style.strokeDashoffset = "0";
+  setGaugeValueProgress(pathLength, 1);
+  gaugeValuePath.classList.toggle("warning", false);
+  displayedRemaining = 999;
+  remainingBudgetEl.textContent = formatGaugeCurrency(999);
+  remainingBudgetEl.classList.remove("is-animating");
+  usageTextEl.textContent = isAuthHydrating ? "正在恢复登录" : "登录后同步消费数据";
+  usageTextEl.dataset.action = "open-settings";
+  usageTextEl.setAttribute("tabindex", "0");
+  usageTextEl.setAttribute("role", "button");
+}
+
 function renderGaugeState(animate = true, fromFull = false) {
   const animationToken = ++gaugeAnimationToken;
   const budget = getBudgetSnapshot();
@@ -2969,6 +2995,11 @@ function renderGaugeState(animate = true, fromFull = false) {
   if (stagedGaugeAnimationFrame) {
     cancelAnimationFrame(stagedGaugeAnimationFrame);
     stagedGaugeAnimationFrame = 0;
+  }
+
+  if (shouldShowAuthGaugePlaceholder()) {
+    renderAuthGaugePlaceholder(pathLength);
+    return;
   }
 
   if (limit > 0) {
@@ -4005,16 +4036,20 @@ function loadCloudHistory() {
 }
 
 function hydrateInitialExpenseHistory() {
+  hasStartupExpenseHistory = false;
+
   if (supabase) {
     const cachedCloudHistory = loadCloudHistory();
     if (cachedCloudHistory.length) {
       expenseHistory = cachedCloudHistory;
+      hasStartupExpenseHistory = true;
       scheduleMonthHistorySummaryForCurrentData();
       return;
     }
   }
 
   expenseHistory = loadHistory();
+  hasStartupExpenseHistory = expenseHistory.length > 0;
   scheduleMonthHistorySummaryForCurrentData();
 }
 
@@ -4044,13 +4079,19 @@ function getRecordPurposeList(item) {
 }
 
 function updateConnectionStatus() {
+  if (isAuthHydrating) {
+    connectionStatusEl.textContent = "登录中";
+    connectionStatusEl.classList.remove("connected");
+    return;
+  }
+
   if (currentSession) {
     connectionStatusEl.textContent = "已连接";
     connectionStatusEl.classList.add("connected");
     return;
   }
 
-  connectionStatusEl.textContent = "本地模式";
+  connectionStatusEl.textContent = "未登录";
   connectionStatusEl.classList.remove("connected");
 }
 

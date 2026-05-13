@@ -147,51 +147,6 @@ option,
     linear-gradient(180deg, var(--page-bg-top), var(--page-bg-bottom));
 }
 
-.debug-build-badge {
-    display: none;
-    position: fixed;
-    top: calc(18px + env(safe-area-inset-top, 0px));
-    left: calc(18px + env(safe-area-inset-left, 0px));
-    z-index: 50;
-    margin: 0;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: linear-gradient(135deg, rgba(105, 240, 195, 0.96), rgba(111, 157, 255, 0.96));
-    -webkit-user-select: none;
-    user-select: none;
-    -webkit-touch-callout: none;
-    -webkit-tap-highlight-color: transparent;
-  color: #07111f;
-  font-size: 0.72rem;
-  font-weight: 700;
-  font-family: "Space Grotesk", sans-serif;
-  line-height: 1;
-  letter-spacing: 0.08em;
-  box-shadow: 0 0 20px rgba(105, 240, 195, 0.22);
-}
-
-.debug-build-badge.is-update {
-  cursor: pointer;
-  background: rgba(255, 78, 78, 0.92);
-  color: #fff;
-  box-shadow: none;
-}
-
-.top-menu-btn.is-update::after {
-  content: "";
-  position: absolute;
-  top: 6px;
-  right: 5px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ff4e4e;
-}
-
-body:not([data-view="home"]) .debug-build-badge {
-  display: none;
-}
-
 .top-menu-btn {
   position: fixed;
   top: calc(30px + env(safe-area-inset-top, 0px));
@@ -223,6 +178,11 @@ body:not([data-view="home"]) .debug-build-badge {
 .top-menu-btn span:nth-child(2) {
   width: 21px;
   justify-self: end;
+}
+
+.top-menu-btn.is-update span:nth-child(1) {
+  background: #ff4e4e;
+  box-shadow: 0 2px 5px rgba(255, 78, 78, 0.2);
 }
 
 .top-menu-btn span:nth-child(3) {
@@ -1593,7 +1553,8 @@ body.keyboard-open .settings-modal.is-page-view {
   margin-top: 24px;
 }
 
-.theme-panel h3 {
+.theme-panel h3,
+.release-info-body h3 {
   margin: 0;
   color: var(--page-text);
   font-size: 1rem;
@@ -1884,6 +1845,14 @@ body.keyboard-open .settings-modal.is-page-view {
 .release-info-status strong {
   color: var(--text);
   font-weight: 600;
+}
+
+.release-info-status.is-update strong {
+  color: #ff4e4e;
+}
+
+.settings-modal.is-page-view .release-info-status.is-update strong {
+  color: #ff4e4e;
 }
 
 .release-info-status a {

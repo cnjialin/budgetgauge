@@ -3017,10 +3017,10 @@ function renderGaugeState(animate = true, fromFull = false) {
     gaugeValuePath.style.transition = "none";
     gaugeReferencePath.style.strokeDasharray = `${pathLength}`;
     gaugeReferencePath.style.strokeDashoffset = `${pathLength * (1 - referenceRatio)}`;
-    setGaugeValueProgress(pathLength, 1);
+    setGaugeValueProgress(pathLength, referenceRatio);
     gaugeValuePath.classList.toggle("warning", false);
-    displayedRemaining = limit;
-    remainingBudgetEl.textContent = formatGaugeCurrency(limit);
+    displayedRemaining = referenceValue;
+    remainingBudgetEl.textContent = formatGaugeCurrency(referenceValue);
     remainingBudgetEl.classList.remove("is-animating");
     gaugeReferencePath.getBoundingClientRect();
     gaugeValuePath.getBoundingClientRect();

@@ -1,5 +1,10 @@
 ﻿import { createClient } from "@supabase/supabase-js";
 
+import { SunburstChart } from "echarts/charts";
+import { GraphicComponent, TooltipComponent } from "echarts/components";
+import { init, use } from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
+
 import { BUILD_STAMP } from "./build-stamp.js";
 import { version as packageVersion } from "./package.json";
 
@@ -21,6 +26,8 @@ const THEME_KEY = "budget-gauge-theme";
 const CUSTOM_CATEGORIES_KEY = "budget-gauge-categories";
 const THEMES = new Set(["default", "forest"]);
 
+use([SunburstChart, GraphicComponent, TooltipComponent, CanvasRenderer]);
+
 const gaugePage = document.querySelector(".gauge-page");
 const supabaseUrlInput = document.querySelector("#supabaseUrlInput");
 const supabaseKeyInput = document.querySelector("#supabaseKeyInput");
@@ -29,6 +36,7 @@ const openExpenseModalBtn = document.querySelector("#openExpenseModalBtn");
 const toggleGaugeModeBtn = document.querySelector("#toggleGaugeModeBtn");
 const homeTabBtn = document.querySelector("#homeTabBtn");
 const openHistoryBtn = document.querySelector("#openHistoryBtn");
+const openStatsBtn = document.querySelector("#openStatsBtn");
 const openSettingsBtn = document.querySelector("#openSettingsBtn");
 const bottomSettingsBtn = document.querySelector("#bottomSettingsBtn");
 const clearExpenseAmountBtn = document.querySelector("#clearExpenseAmountBtn");
@@ -88,6 +96,11 @@ const historyTodayBtn = document.querySelector("#historyTodayBtn");
 const historyMonthBtn = document.querySelector("#historyMonthBtn");
 const historyCard = document.querySelector(".history-card");
 const historyFilter = document.querySelector(".history-filter");
+const statsModal = document.querySelector("#statsModal");
+const statsBackdrop = document.querySelector("#statsBackdrop");
+const statsCard = document.querySelector(".stats-card");
+const expenseSunburstChart = document.querySelector("#expenseSunburstChart");
+const statsEmptyState = document.querySelector("#statsEmptyState");
 const deleteConfirmModal = document.querySelector("#deleteConfirmModal");
 const deleteConfirmBackdrop = document.querySelector("#deleteConfirmBackdrop");
 const deleteConfirmKicker = document.querySelector("#deleteConfirmKicker");
@@ -162,6 +175,9 @@ let isExpenseMode = false;
 let isQuickExpenseMode = false;
 let editingExpenseRecord = null;
 let pageTransitionTimer = 0;
+let expenseStatsChart = null;
+let expenseStatsResizeFrame = 0;
+let expenseStatsCurrentTotal = 0;
 let latestReleaseInfo = null;
 let lastTouchY = 0;
 let viewportMetricsFrame = 0;
@@ -312,6 +328,19 @@ const EXPENSE_CATEGORIES = [
 ];
 const CATEGORY_START_ANGLE = -90;
 const CATEGORY_BUTTON_RADIUS = 31;
+const PREVIOUS_STATS_CATEGORY_COLORS = [
+  "rgb(56, 131, 110)",
+  "rgb(104, 176, 149)",
+  "rgb(242, 129, 129)",
+  "rgb(249, 154, 130)",
+];
+const STATS_CATEGORY_COLORS = [
+  "rgb(158, 219, 249)",
+  "rgb(236, 65, 65)",
+  "rgb(239, 113, 53)",
+  "rgb(250, 245, 171)",
+  "rgb(95, 187, 78)",
+];
 
 expenseCategories = loadExpenseCategories();
 
@@ -340,6 +369,7 @@ async function initialize() {
   gaugePage?.addEventListener("click", handleGaugePageClick);
   homeTabBtn.addEventListener("click", openHomeView);
   openHistoryBtn.addEventListener("click", openHistoryModal);
+  openStatsBtn.addEventListener("click", openStatsModal);
   openSettingsBtn.addEventListener("click", toggleReleaseInfoFromTopMenu);
   bottomSettingsBtn.addEventListener("click", () => openSettingsModal());
   connectionStatusEl.addEventListener("click", openConnectionSettingsModal);
@@ -353,6 +383,7 @@ async function initialize() {
   settingsBackdrop.addEventListener("click", closeSettingsModal);
   closeHistoryBtn.addEventListener("click", closeHistoryModal);
   historyBackdrop.addEventListener("click", closeHistoryModal);
+  statsBackdrop.addEventListener("click", closeStatsModal);
   deleteConfirmBackdrop.addEventListener("click", closeDeleteConfirmModal);
   cancelDeleteExpenseBtn.addEventListener("click", closeDeleteConfirmModal);
   confirmDeleteExpenseBtn.addEventListener("click", confirmPendingDelete);
@@ -452,6 +483,8 @@ function syncViewportMetrics() {
     if (focusedEditable) {
       requestAnimationFrame(() => scrollFocusedControlIntoView(focusedEditable));
     }
+
+    scheduleExpenseStatsResize();
   });
 }
 
@@ -565,6 +598,7 @@ function openExpenseModal(options = {}) {
   }
   hidePageView(settingsModal);
   hidePageView(historyModal);
+  hidePageView(statsModal);
   hidePageView(releaseInfoModal);
   setActiveMainView("home");
   isExpenseMode = true;
@@ -830,10 +864,12 @@ function setActiveMainView(nextView) {
   document.body.dataset.view = nextView;
   homeTabBtn.classList.toggle("active", nextView === "home");
   openHistoryBtn.classList.toggle("active", nextView === "history");
+  openStatsBtn.classList.toggle("active", nextView === "stats");
   bottomSettingsBtn.classList.toggle("active", nextView === "settings");
   openSettingsBtn.classList.toggle("is-active", nextView === "release");
   homeTabBtn.toggleAttribute("aria-current", nextView === "home");
   openHistoryBtn.toggleAttribute("aria-current", nextView === "history");
+  openStatsBtn.toggleAttribute("aria-current", nextView === "stats");
   bottomSettingsBtn.toggleAttribute("aria-current", nextView === "settings");
   openSettingsBtn.setAttribute("aria-expanded", String(nextView === "release"));
 }
@@ -883,6 +919,7 @@ function openHomeView() {
   closeQuickExpenseEntry({ render: false, focus: false });
   hidePageView(settingsModal);
   hidePageView(historyModal);
+  hidePageView(statsModal);
   hidePageView(releaseInfoModal);
   settingsCard.classList.remove("budget-only");
   settingsCard.classList.remove("connection-only");
@@ -905,6 +942,7 @@ function openSettingsModal(mode = "full", options = {}) {
   closeQuickExpenseEntry({ render: false, focus: false });
   isBudgetOnlySettingsMode = mode === "budget";
   hidePageView(historyModal);
+  hidePageView(statsModal);
   hidePageView(releaseInfoModal);
   showPageView(settingsModal, options);
   settingsCard.classList.toggle("budget-only", isBudgetOnlySettingsMode);
@@ -953,6 +991,7 @@ async function openHistoryModal() {
   closeQuickExpenseEntry({ render: false, focus: false });
   renderHistory();
   hidePageView(settingsModal);
+  hidePageView(statsModal);
   hidePageView(releaseInfoModal);
   showPageView(historyModal);
   historyCard.setAttribute("role", "region");
@@ -969,6 +1008,28 @@ function closeHistoryModal() {
   setActiveMainView("home");
   renderGauge();
   openHistoryBtn.focus();
+}
+
+function openStatsModal() {
+  closeQuickExpenseEntry({ render: false, focus: false });
+  renderExpenseStats();
+  hidePageView(settingsModal);
+  hidePageView(historyModal);
+  hidePageView(releaseInfoModal);
+  showPageView(statsModal);
+  statsCard.setAttribute("role", "region");
+  statsCard.removeAttribute("aria-modal");
+  setActiveMainView("stats");
+  scheduleExpenseStatsResize();
+}
+
+function closeStatsModal() {
+  hidePageView(statsModal);
+  statsCard.setAttribute("role", "dialog");
+  statsCard.setAttribute("aria-modal", "true");
+  setActiveMainView("home");
+  renderGauge();
+  openStatsBtn.focus();
 }
 
 function handleHistorySwipeStart(event) {
@@ -1066,6 +1127,7 @@ function openReleaseInfoModal(options = {}) {
 
   hidePageView(settingsModal);
   hidePageView(historyModal);
+  hidePageView(statsModal);
   showPageView(releaseInfoModal, options);
   releaseInfoModal.classList.add("is-page-view");
   releaseInfoModal.classList.toggle("is-animated", Boolean(options.animate));
@@ -1129,6 +1191,7 @@ async function confirmExpense() {
   if (!historyModal.hidden) {
     renderHistory();
   }
+  refreshStatsIfVisible();
 
   if (currentSession) {
     const saved = await persistExpenseToSupabase(optimisticRecord, {
@@ -1143,12 +1206,13 @@ async function confirmExpense() {
       return;
     }
 
-      expenseHistory = expenseHistory.filter((item) => item !== optimisticRecord);
-      scheduleMonthHistorySummaryForCurrentData();
-      renderGauge();
-      if (!historyModal.hidden) {
-        renderHistory();
+    expenseHistory = expenseHistory.filter((item) => item !== optimisticRecord);
+    scheduleMonthHistorySummaryForCurrentData();
+    renderGauge();
+    if (!historyModal.hidden) {
+      renderHistory();
     }
+    refreshStatsIfVisible();
     return;
   }
 }
@@ -1240,6 +1304,7 @@ async function signOutToLocalMode() {
   if (!historyModal.hidden) {
     renderHistory();
   }
+  refreshStatsIfVisible();
 
   settingsStatus.textContent = "已退出账号，当前未登录";
   logoutSettingsBtn.disabled = false;
@@ -1261,6 +1326,7 @@ async function hydrateSupabaseState() {
     updateConnectionStatus();
     disableDataScopeButton();
     renderGaugeState(false);
+    refreshStatsIfVisible();
     return;
   }
 
@@ -1292,6 +1358,7 @@ async function hydrateSupabaseState() {
     scheduleMonthHistorySummaryForCurrentData();
     updateConnectionStatus();
     renderGaugeState(false);
+    refreshStatsIfVisible();
   } catch {
     currentSession = null;
     isAuthHydrating = false;
@@ -1303,6 +1370,7 @@ async function hydrateSupabaseState() {
     updateConnectionStatus();
     disableDataScopeButton();
     renderGaugeState(false);
+    refreshStatsIfVisible();
   }
 }
 
@@ -1601,6 +1669,7 @@ async function updateExpenseRecord(record, nextRecord) {
 
   renderGauge();
   renderHistory();
+  refreshStatsIfVisible();
   expenseStatus.textContent = "";
   closeExpenseModal();
 
@@ -1624,6 +1693,7 @@ async function updateExpenseRecord(record, nextRecord) {
   scheduleMonthHistorySummaryForCurrentData();
   renderGauge();
   renderHistory();
+  refreshStatsIfVisible();
 }
 
 async function deleteExpenseRecord(record) {
@@ -1637,6 +1707,7 @@ async function deleteExpenseRecord(record) {
 
   renderGauge();
   renderHistory();
+  refreshStatsIfVisible();
 
   if (!currentSession) {
     return;
@@ -1652,6 +1723,7 @@ async function deleteExpenseRecord(record) {
   rebuildMonthHistorySummaryForCurrentData();
   renderGauge();
   renderHistory();
+  refreshStatsIfVisible();
 }
 
 function playCategoryWheelTransition() {
@@ -2673,6 +2745,11 @@ function handleDocumentKeydown(event) {
     return;
   }
 
+  if (event.key === "Escape" && !statsModal.hidden) {
+    closeStatsModal();
+    return;
+  }
+
   if (event.key === "Escape" && !deleteConfirmModal.hidden) {
     closeDeleteConfirmModal();
     return;
@@ -3074,6 +3151,253 @@ function setGaugeValueProgress(pathLength, ratio) {
   gaugeValuePath.style.strokeDasharray = `${pathLength}`;
   gaugeValuePath.style.strokeDashoffset = `${pathLength * (1 - normalizedRatio)}`;
   gaugeValuePath.style.opacity = normalizedRatio > 0 ? "1" : "0";
+}
+
+function refreshStatsIfVisible() {
+  if (!statsModal?.hidden) {
+    renderExpenseStats();
+  }
+}
+
+function renderExpenseStats() {
+  if (!statsEmptyState || !expenseSunburstChart) {
+    return;
+  }
+
+  const { data, total } = buildExpenseSunburstData();
+  const coloredData = applyStatsColorsToSunburstData(data);
+  expenseStatsCurrentTotal = total;
+  statsEmptyState.hidden = total > 0;
+  expenseSunburstChart.hidden = total <= 0;
+
+  if (total <= 0) {
+    expenseStatsChart?.clear();
+    return;
+  }
+
+  const chart = getExpenseStatsChart();
+  chart.setOption({
+    backgroundColor: "transparent",
+    tooltip: {
+      trigger: "item",
+      confine: true,
+      formatter(params) {
+        const value = Number(params.value || 0);
+        const percent = expenseStatsCurrentTotal > 0 ? value / expenseStatsCurrentTotal : 0;
+        return `${escapeHtml(params.name || "未分类")}<br>${formatCurrency(value)} · ${formatPercent(percent)}`;
+      },
+    },
+    graphic: [
+      {
+        type: "text",
+        left: "center",
+        top: "45%",
+        silent: true,
+        style: {
+          text: formatCurrency(total),
+          fill: "#303842",
+          fontSize: 20,
+          fontWeight: 700,
+          lineHeight: 24,
+          textAlign: "center",
+        },
+      },
+      {
+        type: "text",
+        left: "center",
+        top: "55%",
+        silent: true,
+        style: {
+          text: "总消费",
+          fill: "#8a929c",
+          fontSize: 14,
+          fontWeight: 700,
+          lineHeight: 18,
+          textAlign: "center",
+        },
+      },
+    ],
+    series: [
+      {
+        type: "sunburst",
+        data: coloredData,
+        radius: [0, "100%"],
+        center: ["50%", "50%"],
+        nodeClick: "rootToNode",
+        sort: (left, right) => Number(right.value || 0) - Number(left.value || 0),
+        emphasis: {
+          focus: "ancestor",
+        },
+        label: {
+          color: "#303842",
+          fontSize: 12,
+          minAngle: 12,
+          rotate: 0,
+          overflow: "truncate",
+        },
+        itemStyle: {
+          borderColor: "rgba(255, 255, 255, 0.88)",
+          borderWidth: 2,
+        },
+        levels: [
+          {
+            radius: [0, "50%"],
+            itemStyle: {
+              color: "rgba(255, 255, 255, 0)",
+              borderWidth: 0,
+            },
+            label: {
+              show: false,
+            },
+          },
+          {
+            radius: ["50%", "75%"],
+            label: {
+              rotate: 0,
+              fontSize: 13,
+              fontWeight: 700,
+            },
+          },
+          {
+            radius: ["75%", "87.5%"],
+            label: {
+              rotate: 0,
+              fontSize: 12,
+            },
+          },
+          {
+            radius: ["87.5%", "100%"],
+            label: {
+              rotate: 0,
+              fontSize: 11,
+            },
+          },
+        ],
+      },
+    ],
+  }, true);
+  scheduleExpenseStatsResize();
+}
+
+function buildExpenseSunburstData() {
+  const rootChildren = [];
+  const rootIndex = new Map();
+  let total = 0;
+
+  expenseHistory
+    .filter((item) => isInCurrentLocalMonth(item.time))
+    .forEach((item) => {
+      const amount = Number(item.amount || 0);
+      if (amount <= 0) {
+        return;
+      }
+
+      const path = getRecordPurposeList(item).slice(0, 3);
+      if (!path.length) {
+        path.push("未分类");
+      }
+
+      total += amount;
+      let siblings = rootChildren;
+      let indexes = rootIndex;
+
+      path.forEach((rawName) => {
+        const name = String(rawName || "").trim() || "未分类";
+        let node = indexes.get(name);
+        if (!node) {
+          node = { name, value: 0, children: [], _index: new Map() };
+          indexes.set(name, node);
+          siblings.push(node);
+        }
+
+        node.value += amount;
+        siblings = node.children;
+        indexes = node._index;
+      });
+    });
+
+  return {
+    total,
+    data: rootChildren.map(cleanExpenseStatsNode),
+  };
+}
+
+function cleanExpenseStatsNode(node) {
+  const children = node.children.map(cleanExpenseStatsNode);
+  const cleanNode = {
+    name: node.name,
+    value: Math.round(Number(node.value || 0) * 100) / 100,
+  };
+
+  if (children.length) {
+    cleanNode.children = children;
+  }
+
+  return cleanNode;
+}
+
+function applyStatsColorsToSunburstData(data) {
+  return data.map((node, index) => {
+    const color = STATS_CATEGORY_COLORS[index % STATS_CATEGORY_COLORS.length];
+    return applySunburstNodeColor(node, color, 0);
+  });
+}
+
+function applySunburstNodeColor(node, color, depth) {
+  const depthColor = lightenColor(color, Math.min(Math.max(depth, 0), 2) * 0.16);
+  const nextNode = {
+    ...node,
+    itemStyle: {
+      ...(node.itemStyle || {}),
+      color: depthColor,
+    },
+  };
+
+  if (node.children?.length) {
+    nextNode.children = node.children.map((child) => applySunburstNodeColor(child, color, depth + 1));
+  }
+
+  return nextNode;
+}
+
+function lightenColor(color, amount) {
+  const channels = parseRgbColor(color);
+  if (!channels) {
+    return color;
+  }
+
+  const [red, green, blue] = channels.map((channel) => Math.round(channel + (255 - channel) * amount));
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+
+function parseRgbColor(color) {
+  const match = String(color || "").match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+  if (!match) {
+    return null;
+  }
+
+  return match.slice(1).map((value) => Number(value));
+}
+
+function getExpenseStatsChart() {
+  if (!expenseStatsChart) {
+    expenseStatsChart = init(expenseSunburstChart);
+  }
+
+  return expenseStatsChart;
+}
+
+function scheduleExpenseStatsResize() {
+  if (!expenseStatsChart || expenseStatsResizeFrame) {
+    return;
+  }
+
+  expenseStatsResizeFrame = requestAnimationFrame(() => {
+    expenseStatsResizeFrame = 0;
+    if (!statsModal?.hidden) {
+      expenseStatsChart.resize();
+    }
+  });
 }
 
 function renderHistory() {
@@ -3712,6 +4036,7 @@ async function refreshExpenses(range = "month", renderOptions = { animate: false
   if (!historyModal.hidden) {
     renderHistory();
   }
+  refreshStatsIfVisible();
 }
 
 async function persistExpenseToSupabase(optimisticRecord, payload) {
@@ -4101,6 +4426,13 @@ function formatCurrency(amount) {
     currency: "CNY",
     minimumFractionDigits: 2,
   }).format(amount);
+}
+
+function formatPercent(value) {
+  return new Intl.NumberFormat("zh-CN", {
+    style: "percent",
+    maximumFractionDigits: 1,
+  }).format(Math.max(0, Number(value) || 0));
 }
 
 function formatGaugeCurrency(amount) {

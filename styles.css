@@ -1005,7 +1005,7 @@ body[data-mode="record"] .gauge-orb {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   transform: translateX(-50%);
   border-radius: 28px 28px 0 0;
   background: rgba(255, 255, 255, 0.86);
@@ -1385,6 +1385,10 @@ body.keyboard-open .settings-modal.is-page-view {
   grid-template-rows: auto auto minmax(0, 1fr);
   align-content: start;
   overflow: hidden;
+}
+
+.settings-modal.is-page-view .stats-card {
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .settings-modal.is-page-view .expense-kicker {
@@ -1881,6 +1885,48 @@ body.keyboard-open .settings-modal.is-page-view {
   justify-content: center;
   text-decoration: none;
   text-align: center;
+}
+
+.stats-chart-shell {
+  --stats-chart-size: min(
+    calc(100vw - 44px),
+    436px,
+    calc(var(--app-viewport-height) - 190px)
+  );
+  position: fixed;
+  left: 50%;
+  top: calc(var(--app-viewport-height) / 2);
+  min-height: 0;
+  width: var(--stats-chart-size);
+  height: var(--stats-chart-size);
+  margin-top: 0;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+}
+
+.stats-sunburst-chart {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+}
+
+.stats-empty-state {
+  width: 100%;
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(136, 151, 170, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--history-muted-text);
+  text-align: center;
+  padding: 22px;
+}
+
+.stats-empty-state[hidden],
+.stats-sunburst-chart[hidden] {
+  display: none;
 }
 
 .history-pager-viewport {
@@ -3321,9 +3367,10 @@ body.keyboard-open .settings-modal.is-page-view {
     height: calc(88px + env(safe-area-inset-bottom, 0px));
     padding:
       14px
-      calc(28px + env(safe-area-inset-right, 0px))
+      calc(22px + env(safe-area-inset-right, 0px))
       calc(14px + env(safe-area-inset-bottom, 0px))
-      calc(28px + env(safe-area-inset-left, 0px));
+      calc(22px + env(safe-area-inset-left, 0px));
+    gap: 6px;
   }
 
   .settings-modal {
@@ -3348,6 +3395,14 @@ body.keyboard-open .settings-modal.is-page-view {
   .history-pager-viewport {
     height: min(42vh, 320px);
     max-height: min(42vh, 320px);
+  }
+
+  .stats-chart-shell {
+    --stats-chart-size: min(
+      calc(100vw - 28px),
+      390px,
+      calc(var(--app-viewport-height) - 170px)
+    );
   }
 
   .expense-field {
@@ -3553,5 +3608,13 @@ body.keyboard-open .settings-modal.is-page-view {
 
   .settings-modal.is-page-view .settings-card {
     width: min(100%, 560px);
+  }
+
+  .stats-chart-shell {
+    --stats-chart-size: min(
+      calc(100vw - 170px),
+      430px,
+      calc(var(--app-viewport-height) - 56px)
+    );
   }
 }

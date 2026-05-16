@@ -1,12 +1,12 @@
 {
   "name": "budget-gauge-app",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.3.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "version:sync": "node scripts/sync-version.mjs",
-    "build": "node scripts/generate-build-stamp.mjs && vite build",
+    "build": "vite build",
     "android:sync": "npm run build && npx cap sync android",
     "preview": "vite preview"
   },

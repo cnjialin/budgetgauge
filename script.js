@@ -5,7 +5,6 @@ import { GraphicComponent, TooltipComponent } from "echarts/components";
 import { init, use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 
-import { BUILD_STAMP } from "./build-stamp.js";
 import { version as packageVersion } from "./package.json";
 
 const APP_RELEASE_TAG = `v${packageVersion}`;
@@ -37,9 +36,7 @@ const toggleGaugeModeBtn = document.querySelector("#toggleGaugeModeBtn");
 const homeTabBtn = document.querySelector("#homeTabBtn");
 const openHistoryBtn = document.querySelector("#openHistoryBtn");
 const openStatsBtn = document.querySelector("#openStatsBtn");
-const openSunburstTestBtn = document.querySelector("#openSunburstTestBtn");
 const openSettingsBtn = document.querySelector("#openSettingsBtn");
-const bottomSettingsBtn = document.querySelector("#bottomSettingsBtn");
 const clearExpenseAmountBtn = document.querySelector("#clearExpenseAmountBtn");
 const connectionStatusEl = document.querySelector("#connectionStatus");
 const centerLabelEl = document.querySelector(".center-label");
@@ -102,10 +99,6 @@ const statsBackdrop = document.querySelector("#statsBackdrop");
 const statsCard = document.querySelector(".stats-card");
 const expenseSunburstChart = document.querySelector("#expenseSunburstChart");
 const statsEmptyState = document.querySelector("#statsEmptyState");
-const sunburstTestModal = document.querySelector("#sunburstTestModal");
-const sunburstTestBackdrop = document.querySelector("#sunburstTestBackdrop");
-const sunburstTestCard = document.querySelector(".sunburst-test-card");
-const sunburstTestChartEl = document.querySelector("#sunburstTestChart");
 const deleteConfirmModal = document.querySelector("#deleteConfirmModal");
 const deleteConfirmBackdrop = document.querySelector("#deleteConfirmBackdrop");
 const deleteConfirmKicker = document.querySelector("#deleteConfirmKicker");
@@ -186,7 +179,6 @@ let expenseStatsCenterFrame = 0;
 let expenseStatsCurrentTotal = 0;
 let expenseStatsChartWidth = 0;
 let expenseStatsChartHeight = 0;
-let sunburstTestChart = null;
 let latestReleaseInfo = null;
 let lastTouchY = 0;
 let viewportMetricsFrame = 0;
@@ -352,54 +344,6 @@ const STATS_CATEGORY_COLORS = [
   "#D8D6D2",
 ];
 
-const SUNBURST_TEST_DATA = [
-  {
-    name: "餐饮",
-    value: 520,
-    children: [
-      { name: "早餐", value: 80 },
-      {
-        name: "午餐",
-        value: 180,
-        children: [
-          { name: "火锅", value: 90 },
-          { name: "小吃", value: 50 },
-          { name: "饮料", value: 40 },
-        ],
-      },
-      { name: "晚餐", value: 210 },
-      { name: "零食", value: 50 },
-    ],
-  },
-  {
-    name: "购物",
-    value: 360,
-    children: [
-      { name: "衣物", value: 160 },
-      { name: "日用品", value: 90 },
-      { name: "数码", value: 110 },
-    ],
-  },
-  {
-    name: "住房",
-    value: 280,
-    children: [
-      { name: "房租", value: 180 },
-      { name: "水电", value: 60 },
-      { name: "网络", value: 40 },
-    ],
-  },
-  {
-    name: "娱乐",
-    value: 210,
-    children: [
-      { name: "电影", value: 70 },
-      { name: "游戏", value: 80 },
-      { name: "会员", value: 60 },
-    ],
-  },
-];
-
 expenseCategories = loadExpenseCategories();
 
 initialize();
@@ -428,9 +372,7 @@ async function initialize() {
   homeTabBtn.addEventListener("click", openHomeView);
   openHistoryBtn.addEventListener("click", openHistoryModal);
   openStatsBtn.addEventListener("click", openStatsModal);
-  openSunburstTestBtn.addEventListener("click", openSunburstTestModal);
   openSettingsBtn.addEventListener("click", toggleReleaseInfoFromTopMenu);
-  bottomSettingsBtn.addEventListener("click", () => openSettingsModal());
   connectionStatusEl.addEventListener("click", openConnectionSettingsModal);
   clearExpenseAmountBtn.addEventListener("click", clearExpenseAmount);
   cancelExpenseBtn.addEventListener("click", closeExpenseModal);
@@ -443,7 +385,6 @@ async function initialize() {
   closeHistoryBtn.addEventListener("click", closeHistoryModal);
   historyBackdrop.addEventListener("click", closeHistoryModal);
   statsBackdrop.addEventListener("click", closeStatsModal);
-  sunburstTestBackdrop.addEventListener("click", closeSunburstTestModal);
   deleteConfirmBackdrop.addEventListener("click", closeDeleteConfirmModal);
   cancelDeleteExpenseBtn.addEventListener("click", closeDeleteConfirmModal);
   confirmDeleteExpenseBtn.addEventListener("click", confirmPendingDelete);
@@ -659,7 +600,6 @@ function openExpenseModal(options = {}) {
   hidePageView(settingsModal);
   hidePageView(historyModal);
   hidePageView(statsModal);
-  hidePageView(sunburstTestModal);
   hidePageView(releaseInfoModal);
   setActiveMainView("home");
   isExpenseMode = true;
@@ -926,14 +866,10 @@ function setActiveMainView(nextView) {
   homeTabBtn.classList.toggle("active", nextView === "home");
   openHistoryBtn.classList.toggle("active", nextView === "history");
   openStatsBtn.classList.toggle("active", nextView === "stats");
-  openSunburstTestBtn.classList.toggle("active", nextView === "sunburst-test");
-  bottomSettingsBtn.classList.toggle("active", nextView === "settings");
   openSettingsBtn.classList.toggle("is-active", nextView === "release");
   homeTabBtn.toggleAttribute("aria-current", nextView === "home");
   openHistoryBtn.toggleAttribute("aria-current", nextView === "history");
   openStatsBtn.toggleAttribute("aria-current", nextView === "stats");
-  openSunburstTestBtn.toggleAttribute("aria-current", nextView === "sunburst-test");
-  bottomSettingsBtn.toggleAttribute("aria-current", nextView === "settings");
   openSettingsBtn.setAttribute("aria-expanded", String(nextView === "release"));
 }
 
@@ -983,10 +919,8 @@ function openHomeView() {
   hidePageView(settingsModal);
   hidePageView(historyModal);
   hidePageView(statsModal);
-  hidePageView(sunburstTestModal);
   hidePageView(releaseInfoModal);
   settingsCard.classList.remove("budget-only");
-  settingsCard.classList.remove("connection-only");
   isBudgetOnlySettingsMode = false;
   handleHistorySwipeCancel();
   setActiveMainView("home");
@@ -1007,14 +941,12 @@ function openSettingsModal(mode = "full", options = {}) {
   isBudgetOnlySettingsMode = mode === "budget";
   hidePageView(historyModal);
   hidePageView(statsModal);
-  hidePageView(sunburstTestModal);
   hidePageView(releaseInfoModal);
   showPageView(settingsModal, options);
   settingsCard.classList.toggle("budget-only", isBudgetOnlySettingsMode);
-  settingsCard.classList.toggle("connection-only", mode === "connection");
   settingsCard.setAttribute("role", "region");
   settingsCard.removeAttribute("aria-modal");
-  settingsModalTitle.textContent = isBudgetOnlySettingsMode ? "额度设置" : "账户设置";
+  settingsModalTitle.textContent = isBudgetOnlySettingsMode ? "额度设置" : "账户与额度";
   setActiveMainView("settings");
   supabaseUrlInput.value = supabaseUrl;
   supabaseKeyInput.value = supabaseKey;
@@ -1024,7 +956,7 @@ function openSettingsModal(mode = "full", options = {}) {
   settingsStatus.textContent = isBudgetOnlySettingsMode
     ? "设置每月总额度"
     : mode === "connection"
-      ? "设置 Supabase 连接信息"
+      ? "设置 Supabase 连接信息和每月额度"
       : currentSession ? "已连接 Supabase" : "当前未登录，请在这里登录同步数据";
 
   if (isBudgetOnlySettingsMode) {
@@ -1045,7 +977,6 @@ function closeSettingsModal(options = {}) {
   settingsCard.setAttribute("role", "dialog");
   settingsCard.setAttribute("aria-modal", "true");
   settingsCard.classList.remove("budget-only");
-  settingsCard.classList.remove("connection-only");
   isBudgetOnlySettingsMode = false;
   setActiveMainView("home");
   renderGauge();
@@ -1057,7 +988,6 @@ async function openHistoryModal() {
   renderHistory();
   hidePageView(settingsModal);
   hidePageView(statsModal);
-  hidePageView(sunburstTestModal);
   hidePageView(releaseInfoModal);
   showPageView(historyModal);
   historyCard.setAttribute("role", "region");
@@ -1081,7 +1011,6 @@ function openStatsModal() {
   resetExpenseStatsChart();
   hidePageView(settingsModal);
   hidePageView(historyModal);
-  hidePageView(sunburstTestModal);
   hidePageView(releaseInfoModal);
   showPageView(statsModal);
   statsCard.setAttribute("role", "region");
@@ -1105,34 +1034,6 @@ function closeStatsModal() {
   setActiveMainView("home");
   renderGauge();
   openStatsBtn.focus();
-}
-
-function openSunburstTestModal() {
-  closeQuickExpenseEntry({ render: false, focus: false });
-  hidePageView(settingsModal);
-  hidePageView(historyModal);
-  hidePageView(statsModal);
-  hidePageView(releaseInfoModal);
-  showPageView(sunburstTestModal);
-  sunburstTestCard.setAttribute("role", "region");
-  sunburstTestCard.removeAttribute("aria-modal");
-  setActiveMainView("sunburst-test");
-  requestAnimationFrame(() => {
-    if (sunburstTestModal?.hidden) {
-      return;
-    }
-
-    renderSunburstTestChart();
-  });
-}
-
-function closeSunburstTestModal() {
-  hidePageView(sunburstTestModal);
-  sunburstTestCard.setAttribute("role", "dialog");
-  sunburstTestCard.setAttribute("aria-modal", "true");
-  setActiveMainView("home");
-  renderGauge();
-  openSunburstTestBtn.focus();
 }
 
 function handleHistorySwipeStart(event) {
@@ -1231,7 +1132,6 @@ function openReleaseInfoModal(options = {}) {
   hidePageView(settingsModal);
   hidePageView(historyModal);
   hidePageView(statsModal);
-  hidePageView(sunburstTestModal);
   showPageView(releaseInfoModal, options);
   releaseInfoModal.classList.add("is-page-view");
   releaseInfoModal.classList.toggle("is-animated", Boolean(options.animate));
@@ -1328,7 +1228,7 @@ async function saveSettings() {
   password = passwordInput.value;
   const nextMonthlyBudgetLimit = sanitizeNumber(monthlyBudgetInput.value);
 
-  if (isBudgetOnlySettingsMode && nextMonthlyBudgetLimit <= 0) {
+  if (nextMonthlyBudgetLimit <= 0) {
     monthlyBudgetInput.focus();
     settingsStatus.textContent = "请输入大于 0 的每月总额度。";
     return;
@@ -2854,11 +2754,6 @@ function handleDocumentKeydown(event) {
     return;
   }
 
-  if (event.key === "Escape" && !sunburstTestModal.hidden) {
-    closeSunburstTestModal();
-    return;
-  }
-
   if (event.key === "Escape" && !deleteConfirmModal.hidden) {
     closeDeleteConfirmModal();
     return;
@@ -3266,51 +3161,6 @@ function refreshStatsIfVisible() {
   if (!statsModal?.hidden) {
     renderExpenseStats();
   }
-}
-
-function renderSunburstTestChart() {
-  if (!sunburstTestChartEl) {
-    return;
-  }
-
-  if (!sunburstTestChart) {
-    sunburstTestChart = init(sunburstTestChartEl);
-  }
-
-  sunburstTestChart.resize();
-  sunburstTestChart.setOption({
-    series: [
-      {
-        type: "sunburst",
-        data: SUNBURST_TEST_DATA,
-        radius: ["18%", "92%"],
-        nodeClick: "rootToNode",
-        label: {
-          rotate: 0,
-          fontSize: 13,
-        },
-        levels: [
-          {},
-          {
-            r0: "18%",
-            r: "48%",
-            label: {
-              fontSize: 16,
-              fontWeight: "bold",
-            },
-          },
-          {
-            r0: "48%",
-            r: "70%",
-          },
-          {
-            r0: "70%",
-            r: "92%",
-          },
-        ],
-      },
-    ],
-  });
 }
 
 function renderExpenseStats(options = {}) {

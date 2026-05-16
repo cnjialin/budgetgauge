@@ -151,6 +151,14 @@
         </svg>
       </button>
 
+      <button id="openSunburstTestBtn" class="bottom-nav-btn" type="button" aria-controls="sunburstTestModal" aria-label="查看旭日图测试">
+        <svg viewBox="0 0 24 24" fill="none" role="presentation" aria-hidden="true">
+          <circle cx="12" cy="12" r="8"></circle>
+          <path d="M12 4v8l6.9 4"></path>
+          <path d="M12 12 5.1 16"></path>
+        </svg>
+      </button>
+
       <button id="bottomSettingsBtn" class="bottom-nav-btn" type="button" aria-controls="settingsModal" aria-label="打开设置" hidden>
         <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
           <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
@@ -282,6 +290,17 @@
       <div class="stats-chart-shell">
         <div id="expenseSunburstChart" class="stats-sunburst-chart" role="img" aria-label="本月消费分类旭日图"></div>
         <div id="statsEmptyState" class="stats-empty-state" hidden>本月还没有可统计的消费记录。</div>
+      </div>
+    </section>
+  </div>
+
+  <div id="sunburstTestModal" class="settings-modal" hidden>
+    <div id="sunburstTestBackdrop" class="expense-backdrop"></div>
+    <section class="settings-card stats-card sunburst-test-card" role="dialog" aria-modal="true" aria-labelledby="sunburstTestTitle">
+      <p class="expense-kicker">Sunburst Test</p>
+      <h2 id="sunburstTestTitle">旭日图测试</h2>
+      <div class="sunburst-test-chart-shell">
+        <div id="sunburstTestChart" class="sunburst-test-chart" role="img" aria-label="旭日图标签动画测试"></div>
       </div>
     </section>
   </div>

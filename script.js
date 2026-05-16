@@ -37,6 +37,7 @@ const toggleGaugeModeBtn = document.querySelector("#toggleGaugeModeBtn");
 const homeTabBtn = document.querySelector("#homeTabBtn");
 const openHistoryBtn = document.querySelector("#openHistoryBtn");
 const openStatsBtn = document.querySelector("#openStatsBtn");
+const openSunburstTestBtn = document.querySelector("#openSunburstTestBtn");
 const openSettingsBtn = document.querySelector("#openSettingsBtn");
 const bottomSettingsBtn = document.querySelector("#bottomSettingsBtn");
 const clearExpenseAmountBtn = document.querySelector("#clearExpenseAmountBtn");
@@ -101,6 +102,10 @@ const statsBackdrop = document.querySelector("#statsBackdrop");
 const statsCard = document.querySelector(".stats-card");
 const expenseSunburstChart = document.querySelector("#expenseSunburstChart");
 const statsEmptyState = document.querySelector("#statsEmptyState");
+const sunburstTestModal = document.querySelector("#sunburstTestModal");
+const sunburstTestBackdrop = document.querySelector("#sunburstTestBackdrop");
+const sunburstTestCard = document.querySelector(".sunburst-test-card");
+const sunburstTestChartEl = document.querySelector("#sunburstTestChart");
 const deleteConfirmModal = document.querySelector("#deleteConfirmModal");
 const deleteConfirmBackdrop = document.querySelector("#deleteConfirmBackdrop");
 const deleteConfirmKicker = document.querySelector("#deleteConfirmKicker");
@@ -177,7 +182,11 @@ let editingExpenseRecord = null;
 let pageTransitionTimer = 0;
 let expenseStatsChart = null;
 let expenseStatsResizeFrame = 0;
+let expenseStatsCenterFrame = 0;
 let expenseStatsCurrentTotal = 0;
+let expenseStatsChartWidth = 0;
+let expenseStatsChartHeight = 0;
+let sunburstTestChart = null;
 let latestReleaseInfo = null;
 let lastTouchY = 0;
 let viewportMetricsFrame = 0;
@@ -335,11 +344,60 @@ const PREVIOUS_STATS_CATEGORY_COLORS = [
   "rgb(249, 154, 130)",
 ];
 const STATS_CATEGORY_COLORS = [
-  "rgb(158, 219, 249)",
-  "rgb(236, 65, 65)",
-  "rgb(239, 113, 53)",
-  "rgb(250, 245, 171)",
-  "rgb(95, 187, 78)",
+  "rgb(151, 192, 173)",
+  "rgb(162,209,166)",
+  "rgb(189,223,151)",
+  "rgb(228,223,134)",
+  "#F2A7A0",
+  "#D8D6D2",
+];
+
+const SUNBURST_TEST_DATA = [
+  {
+    name: "餐饮",
+    value: 520,
+    children: [
+      { name: "早餐", value: 80 },
+      {
+        name: "午餐",
+        value: 180,
+        children: [
+          { name: "火锅", value: 90 },
+          { name: "小吃", value: 50 },
+          { name: "饮料", value: 40 },
+        ],
+      },
+      { name: "晚餐", value: 210 },
+      { name: "零食", value: 50 },
+    ],
+  },
+  {
+    name: "购物",
+    value: 360,
+    children: [
+      { name: "衣物", value: 160 },
+      { name: "日用品", value: 90 },
+      { name: "数码", value: 110 },
+    ],
+  },
+  {
+    name: "住房",
+    value: 280,
+    children: [
+      { name: "房租", value: 180 },
+      { name: "水电", value: 60 },
+      { name: "网络", value: 40 },
+    ],
+  },
+  {
+    name: "娱乐",
+    value: 210,
+    children: [
+      { name: "电影", value: 70 },
+      { name: "游戏", value: 80 },
+      { name: "会员", value: 60 },
+    ],
+  },
 ];
 
 expenseCategories = loadExpenseCategories();
@@ -370,6 +428,7 @@ async function initialize() {
   homeTabBtn.addEventListener("click", openHomeView);
   openHistoryBtn.addEventListener("click", openHistoryModal);
   openStatsBtn.addEventListener("click", openStatsModal);
+  openSunburstTestBtn.addEventListener("click", openSunburstTestModal);
   openSettingsBtn.addEventListener("click", toggleReleaseInfoFromTopMenu);
   bottomSettingsBtn.addEventListener("click", () => openSettingsModal());
   connectionStatusEl.addEventListener("click", openConnectionSettingsModal);
@@ -384,6 +443,7 @@ async function initialize() {
   closeHistoryBtn.addEventListener("click", closeHistoryModal);
   historyBackdrop.addEventListener("click", closeHistoryModal);
   statsBackdrop.addEventListener("click", closeStatsModal);
+  sunburstTestBackdrop.addEventListener("click", closeSunburstTestModal);
   deleteConfirmBackdrop.addEventListener("click", closeDeleteConfirmModal);
   cancelDeleteExpenseBtn.addEventListener("click", closeDeleteConfirmModal);
   confirmDeleteExpenseBtn.addEventListener("click", confirmPendingDelete);
@@ -599,6 +659,7 @@ function openExpenseModal(options = {}) {
   hidePageView(settingsModal);
   hidePageView(historyModal);
   hidePageView(statsModal);
+  hidePageView(sunburstTestModal);
   hidePageView(releaseInfoModal);
   setActiveMainView("home");
   isExpenseMode = true;
@@ -865,11 +926,13 @@ function setActiveMainView(nextView) {
   homeTabBtn.classList.toggle("active", nextView === "home");
   openHistoryBtn.classList.toggle("active", nextView === "history");
   openStatsBtn.classList.toggle("active", nextView === "stats");
+  openSunburstTestBtn.classList.toggle("active", nextView === "sunburst-test");
   bottomSettingsBtn.classList.toggle("active", nextView === "settings");
   openSettingsBtn.classList.toggle("is-active", nextView === "release");
   homeTabBtn.toggleAttribute("aria-current", nextView === "home");
   openHistoryBtn.toggleAttribute("aria-current", nextView === "history");
   openStatsBtn.toggleAttribute("aria-current", nextView === "stats");
+  openSunburstTestBtn.toggleAttribute("aria-current", nextView === "sunburst-test");
   bottomSettingsBtn.toggleAttribute("aria-current", nextView === "settings");
   openSettingsBtn.setAttribute("aria-expanded", String(nextView === "release"));
 }
@@ -920,6 +983,7 @@ function openHomeView() {
   hidePageView(settingsModal);
   hidePageView(historyModal);
   hidePageView(statsModal);
+  hidePageView(sunburstTestModal);
   hidePageView(releaseInfoModal);
   settingsCard.classList.remove("budget-only");
   settingsCard.classList.remove("connection-only");
@@ -943,6 +1007,7 @@ function openSettingsModal(mode = "full", options = {}) {
   isBudgetOnlySettingsMode = mode === "budget";
   hidePageView(historyModal);
   hidePageView(statsModal);
+  hidePageView(sunburstTestModal);
   hidePageView(releaseInfoModal);
   showPageView(settingsModal, options);
   settingsCard.classList.toggle("budget-only", isBudgetOnlySettingsMode);
@@ -992,6 +1057,7 @@ async function openHistoryModal() {
   renderHistory();
   hidePageView(settingsModal);
   hidePageView(statsModal);
+  hidePageView(sunburstTestModal);
   hidePageView(releaseInfoModal);
   showPageView(historyModal);
   historyCard.setAttribute("role", "region");
@@ -1012,15 +1078,24 @@ function closeHistoryModal() {
 
 function openStatsModal() {
   closeQuickExpenseEntry({ render: false, focus: false });
-  renderExpenseStats();
+  resetExpenseStatsChart();
   hidePageView(settingsModal);
   hidePageView(historyModal);
+  hidePageView(sunburstTestModal);
   hidePageView(releaseInfoModal);
   showPageView(statsModal);
   statsCard.setAttribute("role", "region");
   statsCard.removeAttribute("aria-modal");
   setActiveMainView("stats");
-  scheduleExpenseStatsResize();
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (statsModal?.hidden) {
+        return;
+      }
+
+      renderExpenseStats({ prepareInitialAnimation: true, resizeAfterRender: false });
+    });
+  });
 }
 
 function closeStatsModal() {
@@ -1030,6 +1105,34 @@ function closeStatsModal() {
   setActiveMainView("home");
   renderGauge();
   openStatsBtn.focus();
+}
+
+function openSunburstTestModal() {
+  closeQuickExpenseEntry({ render: false, focus: false });
+  hidePageView(settingsModal);
+  hidePageView(historyModal);
+  hidePageView(statsModal);
+  hidePageView(releaseInfoModal);
+  showPageView(sunburstTestModal);
+  sunburstTestCard.setAttribute("role", "region");
+  sunburstTestCard.removeAttribute("aria-modal");
+  setActiveMainView("sunburst-test");
+  requestAnimationFrame(() => {
+    if (sunburstTestModal?.hidden) {
+      return;
+    }
+
+    renderSunburstTestChart();
+  });
+}
+
+function closeSunburstTestModal() {
+  hidePageView(sunburstTestModal);
+  sunburstTestCard.setAttribute("role", "dialog");
+  sunburstTestCard.setAttribute("aria-modal", "true");
+  setActiveMainView("home");
+  renderGauge();
+  openSunburstTestBtn.focus();
 }
 
 function handleHistorySwipeStart(event) {
@@ -1128,6 +1231,7 @@ function openReleaseInfoModal(options = {}) {
   hidePageView(settingsModal);
   hidePageView(historyModal);
   hidePageView(statsModal);
+  hidePageView(sunburstTestModal);
   showPageView(releaseInfoModal, options);
   releaseInfoModal.classList.add("is-page-view");
   releaseInfoModal.classList.toggle("is-animated", Boolean(options.animate));
@@ -2750,6 +2854,11 @@ function handleDocumentKeydown(event) {
     return;
   }
 
+  if (event.key === "Escape" && !sunburstTestModal.hidden) {
+    closeSunburstTestModal();
+    return;
+  }
+
   if (event.key === "Escape" && !deleteConfirmModal.hidden) {
     closeDeleteConfirmModal();
     return;
@@ -3159,7 +3268,54 @@ function refreshStatsIfVisible() {
   }
 }
 
-function renderExpenseStats() {
+function renderSunburstTestChart() {
+  if (!sunburstTestChartEl) {
+    return;
+  }
+
+  if (!sunburstTestChart) {
+    sunburstTestChart = init(sunburstTestChartEl);
+  }
+
+  sunburstTestChart.resize();
+  sunburstTestChart.setOption({
+    series: [
+      {
+        type: "sunburst",
+        data: SUNBURST_TEST_DATA,
+        radius: ["18%", "92%"],
+        nodeClick: "rootToNode",
+        label: {
+          rotate: 0,
+          fontSize: 13,
+        },
+        levels: [
+          {},
+          {
+            r0: "18%",
+            r: "48%",
+            label: {
+              fontSize: 16,
+              fontWeight: "bold",
+            },
+          },
+          {
+            r0: "48%",
+            r: "70%",
+          },
+          {
+            r0: "70%",
+            r: "92%",
+          },
+        ],
+      },
+    ],
+  });
+}
+
+function renderExpenseStats(options = {}) {
+  const { prepareInitialAnimation = false, resizeAfterRender = true } = options;
+
   if (!statsEmptyState || !expenseSunburstChart) {
     return;
   }
@@ -3176,19 +3332,20 @@ function renderExpenseStats() {
   }
 
   const chart = getExpenseStatsChart();
+  if (prepareInitialAnimation) {
+    chart.clear();
+    resizeExpenseStatsChart({ force: true });
+  }
+
   chart.setOption({
     backgroundColor: "transparent",
+    animationDuration: prepareInitialAnimation ? 1000 : undefined,
     tooltip: {
-      trigger: "item",
-      confine: true,
-      formatter(params) {
-        const value = Number(params.value || 0);
-        const percent = expenseStatsCurrentTotal > 0 ? value / expenseStatsCurrentTotal : 0;
-        return `${escapeHtml(params.name || "未分类")}<br>${formatCurrency(value)} · ${formatPercent(percent)}`;
-      },
+      show: false,
     },
     graphic: [
       {
+        id: "expenseStatsTotalValue",
         type: "text",
         left: "center",
         top: "45%",
@@ -3196,6 +3353,7 @@ function renderExpenseStats() {
         style: {
           text: formatCurrency(total),
           fill: "#303842",
+          opacity: prepareInitialAnimation ? 0 : 1,
           fontSize: 20,
           fontWeight: 700,
           lineHeight: 24,
@@ -3203,6 +3361,7 @@ function renderExpenseStats() {
         },
       },
       {
+        id: "expenseStatsTotalLabel",
         type: "text",
         left: "center",
         top: "55%",
@@ -3210,6 +3369,7 @@ function renderExpenseStats() {
         style: {
           text: "总消费",
           fill: "#8a929c",
+          opacity: prepareInitialAnimation ? 0 : 1,
           fontSize: 14,
           fontWeight: 700,
           lineHeight: 18,
@@ -3226,7 +3386,16 @@ function renderExpenseStats() {
         nodeClick: "rootToNode",
         sort: (left, right) => Number(right.value || 0) - Number(left.value || 0),
         emphasis: {
-          focus: "ancestor",
+          disabled: true,
+          focus: "none",
+        },
+        blur: {
+          itemStyle: {
+            opacity: 1,
+          },
+          label: {
+            opacity: 1,
+          },
         },
         label: {
           color: "#303842",
@@ -3276,7 +3445,92 @@ function renderExpenseStats() {
       },
     ],
   }, true);
-  scheduleExpenseStatsResize();
+
+  if (resizeAfterRender) {
+    scheduleExpenseStatsResize();
+  }
+
+  if (prepareInitialAnimation) {
+    requestAnimationFrame(() => {
+      if (!expenseStatsChart || statsModal?.hidden) {
+        return;
+      }
+
+      updateExpenseStatsCenterGraphic({ opacity: 1 });
+    });
+  }
+}
+
+function getExpenseStatsCenterInfo() {
+  const seriesModel = expenseStatsChart?.getModel?.().getSeriesByIndex(0);
+  const viewRoot = seriesModel?.getViewRoot?.();
+
+  if (viewRoot?.depth > 0) {
+    return {
+      amount: Number(viewRoot.getValue?.() ?? 0) || 0,
+      label: viewRoot.name || "当前分类",
+    };
+  }
+
+  return {
+    amount: expenseStatsCurrentTotal,
+    label: "总消费",
+  };
+}
+
+function updateExpenseStatsCenterGraphic({ opacity = 1 } = {}) {
+  if (!expenseStatsChart) {
+    return;
+  }
+
+  const { amount, label } = getExpenseStatsCenterInfo();
+  updateExpenseStatsTextElement("expenseStatsTotalValue", {
+    text: formatCurrency(amount),
+    opacity,
+  });
+  updateExpenseStatsTextElement("expenseStatsTotalLabel", {
+    text: label,
+    opacity,
+  });
+  expenseStatsChart.getZr().refresh();
+}
+
+function updateExpenseStatsTextElement(id, style) {
+  const element = findExpenseStatsGraphicElement(id);
+  if (!element) {
+    return;
+  }
+
+  element.attr({
+    style: {
+      ...element.style,
+      ...style,
+    },
+  });
+  element.dirty();
+}
+
+function findExpenseStatsGraphicElement(id) {
+  let match = null;
+  expenseStatsChart?.getZr().storage.traverse((element) => {
+    if (element.id === id) {
+      match = element;
+    }
+  });
+  return match;
+}
+
+function scheduleExpenseStatsCenterUpdate() {
+  if (expenseStatsCenterFrame) {
+    return;
+  }
+
+  expenseStatsCenterFrame = requestAnimationFrame(() => {
+    expenseStatsCenterFrame = 0;
+    if (!statsModal?.hidden) {
+      updateExpenseStatsCenterGraphic();
+    }
+  });
 }
 
 function buildExpenseSunburstData() {
@@ -3361,7 +3615,7 @@ function applySunburstNodeColor(node, color, depth) {
 }
 
 function lightenColor(color, amount) {
-  const channels = parseRgbColor(color);
+  const channels = parseColorChannels(color);
   if (!channels) {
     return color;
   }
@@ -3370,21 +3624,50 @@ function lightenColor(color, amount) {
   return `rgb(${red}, ${green}, ${blue})`;
 }
 
-function parseRgbColor(color) {
-  const match = String(color || "").match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
-  if (!match) {
+function parseColorChannels(color) {
+  const value = String(color || "").trim();
+  const rgbMatch = value.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/i);
+  if (rgbMatch) {
+    return rgbMatch.slice(1).map((channel) => Number(channel));
+  }
+
+  const hexMatch = value.match(/^#([0-9a-f]{6})$/i);
+  if (!hexMatch) {
     return null;
   }
 
-  return match.slice(1).map((value) => Number(value));
+  const hex = hexMatch[1];
+  return [
+    Number.parseInt(hex.slice(0, 2), 16),
+    Number.parseInt(hex.slice(2, 4), 16),
+    Number.parseInt(hex.slice(4, 6), 16),
+  ];
 }
 
 function getExpenseStatsChart() {
   if (!expenseStatsChart) {
     expenseStatsChart = init(expenseSunburstChart);
+    expenseStatsChart.on("sunburstRootToNode", scheduleExpenseStatsCenterUpdate);
+    expenseStatsChart.on("click", scheduleExpenseStatsCenterUpdate);
   }
 
   return expenseStatsChart;
+}
+
+function resetExpenseStatsChart() {
+  if (expenseStatsCenterFrame) {
+    cancelAnimationFrame(expenseStatsCenterFrame);
+    expenseStatsCenterFrame = 0;
+  }
+
+  if (!expenseStatsChart) {
+    return;
+  }
+
+  expenseStatsChart.dispose();
+  expenseStatsChart = null;
+  expenseStatsChartWidth = 0;
+  expenseStatsChartHeight = 0;
 }
 
 function scheduleExpenseStatsResize() {
@@ -3395,9 +3678,35 @@ function scheduleExpenseStatsResize() {
   expenseStatsResizeFrame = requestAnimationFrame(() => {
     expenseStatsResizeFrame = 0;
     if (!statsModal?.hidden) {
-      expenseStatsChart.resize();
+      resizeExpenseStatsChart();
     }
   });
+}
+
+function resizeExpenseStatsChart({ force = false } = {}) {
+  if (!expenseStatsChart || !expenseSunburstChart) {
+    return;
+  }
+
+  const rect = expenseSunburstChart.getBoundingClientRect();
+  const width = Math.round(rect.width);
+  const height = Math.round(rect.height);
+
+  if (!width || !height) {
+    return;
+  }
+
+  if (
+    !force
+    && Math.abs(width - expenseStatsChartWidth) < 1
+    && Math.abs(height - expenseStatsChartHeight) < 1
+  ) {
+    return;
+  }
+
+  expenseStatsChartWidth = width;
+  expenseStatsChartHeight = height;
+  expenseStatsChart.resize();
 }
 
 function renderHistory() {

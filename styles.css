@@ -1003,7 +1003,7 @@ body[data-mode="record"] .gauge-orb {
     calc(16px + env(safe-area-inset-bottom, 0px))
     calc(34px + env(safe-area-inset-left, 0px));
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
   gap: 8px;
   transform: translateX(-50%);
@@ -1927,6 +1927,20 @@ body.keyboard-open .settings-modal.is-page-view {
 .stats-empty-state[hidden],
 .stats-sunburst-chart[hidden] {
   display: none;
+}
+
+.sunburst-test-chart-shell {
+  width: min(calc(100vw - 44px), 520px, calc(var(--app-viewport-height) - 190px));
+  height: min(calc(100vw - 44px), 520px, calc(var(--app-viewport-height) - 190px));
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+.sunburst-test-chart {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
 }
 
 .history-pager-viewport {
@@ -3573,7 +3587,7 @@ body.keyboard-open .settings-modal.is-page-view {
       18px
       calc(10px + env(safe-area-inset-left, 0px));
     grid-template-columns: 1fr;
-    grid-template-rows: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(4, minmax(0, 1fr));
     gap: 10px;
     transform: translateY(-50%);
     border-radius: 0 28px 28px 0;

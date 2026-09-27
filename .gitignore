@@ -46,3 +46,7 @@ android/local.properties
 android/keystore.properties
 android/*.jks
 android/*.keystore
+
+# Local previews, packaged test builds and chat attachments
+outputs/
+.codex-remote-attachments/

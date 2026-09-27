@@ -1,0 +1,227 @@
+/* Only the embedded editor changes theme; the existing app keeps its styles. */
+#browseStatus { display:none; }
+body.water-page-view { background:#fff; }
+body.water-page-view { --page-heading-size:26px; --page-heading-top:max(76px,calc(env(safe-area-inset-top,0px) + 52px)); }
+.water-page-view #historyModal, .water-page-view #statsModal {
+  --page-bg-top:#fff; --page-bg-bottom:#fff; --page-text:#111; --page-title:#111; --page-muted:#777; --page-blue:#111; --page-cyan:#111;
+  background:#fff; color:#111; padding-top:var(--page-heading-top); padding-bottom:26px; transform:none!important; transition:none!important;
+}
+.water-page-view #historyModal .expense-kicker, .water-page-view #statsModal .expense-kicker { display:none; }
+.water-page-view #historyModalTitle, .water-page-view #statsModalTitle { margin:0; color:#111; font:400 var(--page-heading-size)/1.35 system-ui,sans-serif; flex-shrink:0; }
+.water-page-view #historyModal .history-filter,
+.water-page-view #historyModal .history-page:first-child { display:none; }
+.water-page-view #historyPagerTrack { grid-template-columns:100%; transform:none!important; transition:none!important; }
+.water-page-view #historyModal, .water-page-view #statsModal { touch-action:pan-y; }
+.water-page-view #historyModal .history-pager-viewport { min-height:0; flex:1 1 0; }
+.water-page-view #historyModal .history-list { scrollbar-width:none; padding-right:0; }
+.water-page-view #historyModal .history-list::-webkit-scrollbar { display:none; width:0; height:0; }
+.water-page-view #historyModal .history-bar-value { background:var(--water-ink,#000); box-shadow:none; }
+.water-page-view #statsModal .stats-card { grid-template-rows:auto minmax(0,1fr); }
+.water-page-view #historyModal .history-item { box-shadow:none; border-color:#ddd; }
+.water-page-view #historyModal .history-tab { color:#666; }
+.water-page-view #historyModal .history-tab.active { color:#fff; }
+.water-page-view #historyModal .history-filter::before { background:#111; box-shadow:none; }
+.water-page-view #waterQuickCancel { display:none; }
+.water-page-view #browseStatus { display:block; position:fixed; bottom:4px; left:22px; right:22px; z-index:30; color:#b42318; font-size:12px; pointer-events:none; }
+body.water-record-view {
+  color-scheme: dark;
+  --page-bg: #000; --page-bg-top: #000; --page-bg-bottom: #000;
+  --page-text: #fff; --page-title: #fff; --page-muted: #999;
+  --page-blue: #fff; --page-cyan: #aaa; --page-accent-rgb: 255,255,255;
+  --text: #fff; --muted: #999; --accent: #fff; --blue: #fff;
+  --category-highlight: #252525;
+  background: #000; color: #fff; font-family: system-ui, sans-serif;
+}
+.water-record-view .bottom-nav, .water-record-view .top-menu-btn,
+.water-record-view .home-head-content, .water-record-view .budget-gauge,
+.water-record-view .add-expense-btn, .water-record-view #usageText { display: none !important; }
+.water-record-view .gauge-page { background: #000; }
+.water-record-view .gauge-center strong, .water-record-view input,
+.water-record-view .record-amount-prefix, .water-record-view .expense-datetime-trigger,
+.water-record-view .category-wheel-center { color: #fff !important; }
+.water-record-view input, .water-record-view [contenteditable] { caret-color: #fff; }
+.water-record-view .record-amount-label, .water-record-view .record-time-label,
+.water-record-view .record-category-label, .water-record-view .center-label { color: #999 !important; }
+.water-record-view .record-time-field svg, .water-record-view .record-category-field svg { color: #999; }
+.water-record-view .record-status { color: #aaa; }
+.water-record-view .category-wheel { --category-highlight: #252525; --category-divider: #444; background: transparent; box-shadow: none; border-color: #333; }
+.water-record-view .category-divider { background: #333; }
+.water-record-view .category-wheel-center { background: #000; border-color: #444; box-shadow: none; }
+.water-record-view .category-segment { color: #777; }
+.water-record-view .category-segment.active { color: #fff; }
+.water-record-view .expense-round-btn { background: #111; border: 1px solid #444; color: #fff; box-shadow: none; }
+.water-record-view .expense-round-btn.confirm { background: #fff; color: #000; border-color: #fff; }
+.water-record-view .record-clear-btn { color: #aaa; }
+.water-record-view .quick-expense-continue-btn { position: fixed; bottom: 34px; background: #fff; color: #000; box-shadow: none; border: 0; font: 15px system-ui; }
+.water-record-view .quick-expense-continue-btn:disabled { background: #222; color: #777; opacity: 1; }
+.water-record-view #waterQuickCancel { position: fixed; z-index: 15; top: 22px; left: 20px; min-width: 44px; min-height: 44px; border: 0; background: none; color: #aaa; font: 14px system-ui; }
+.water-record-view[data-mode="record"] #waterQuickCancel { display: none; }
+.water-record-view #waterQuickCancel svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.water-record-view .datetime-picker-card { background: #111; color: #fff; border: 1px solid #333; box-shadow: none; }
+.water-record-view .datetime-picker-card button { color: #fff; }
+.water-record-view .calendar-day.is-selected { background: transparent; color: #000 !important; }
+.water-record-view .calendar-day.is-selected::before { background: #fff; box-shadow: none; }
+.water-record-view .expense-btn.primary { background: #fff; color: #000 !important; box-shadow: none; }
+.water-record-view .datetime-picker-modal { background: rgba(0,0,0,.7); }
+.water-record-view .time-wheel-shell::before { border-color: #444; background: #222; }
+.water-record-view .time-wheel-shell { background: #111; border-color: #333; }
+.water-record-view .calendar-nav-btn, .water-record-view .expense-btn.ghost { background: #222; }
+.water-record-view input::placeholder { color: #888 !important; }
+.water-record-view .time-wheel-item { color: #888; }
+.water-record-view .time-wheel-item.active, .water-record-view .time-wheel-item.is-selected { color: #fff; }
+.water-record-view .datetime-picker-toolbar, .water-record-view .datetime-picker-actions { border-color: #333; }
+
+.water-record-view button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.water-record-view #waterKeypad { display: none; }
+.water-record-view.quick-expense-mode #waterKeypad,
+.water-record-view.water-amount-editing #waterKeypad {
+  display: grid; justify-items: center; gap: 12px;
+  position: fixed; z-index: 20; bottom: max(20px, env(safe-area-inset-bottom));
+  left: 50%; transform: translateX(-50%); width: min(84vw, 360px);
+  background: #000; padding: 10px 0;
+}
+.water-record-view .water-key-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); justify-items: center;
+  gap: clamp(8px, 1.5dvh, 14px) 24px; width: 100%;
+}
+.water-record-view .water-key-grid button {
+  width: min(19vw, 9dvh, 76px); aspect-ratio: 1; border-radius: 50%;
+  border: 1px solid #202020; background: #111; color: #fff;
+  font: 400 28px system-ui; padding: 0;
+}
+.water-record-view .water-key-grid button:active { background: #303030; }
+.water-record-view #waterKeypad .quick-expense-continue-btn {
+  position: static; transform: none; grid-area: auto; width: min(19vw, 9dvh, 76px);
+  height: auto; aspect-ratio: 1; opacity: 1; visibility: visible; pointer-events: auto;
+  font-size: 30px;
+}
+.water-record-view #waterKeypad .quick-expense-continue-btn:disabled { pointer-events: none; opacity: .5; }
+.water-record-view.quick-expense-mode .gauge-orb {
+  position: fixed; top: 70px; left: 0; width: 100%; height: calc(42dvh - 70px);
+  transform: none;
+}
+.water-record-view.quick-expense-mode .gauge-center { width: 92%; }
+.water-record-view.quick-expense-mode .gauge-center strong {
+  font-size: clamp(48px, 16vw, 72px); font-weight: 300; letter-spacing: -1px;
+  cursor: default; user-select: none; -webkit-user-select: none;
+}
+.water-record-view.quick-expense-mode .gauge-center strong:empty::after { color: #666; }
+.water-record-view .record-head-content { max-height: none; overflow: visible; }
+.water-record-view .record-amount-field {
+  grid-template-columns: auto minmax(0, auto); justify-content: center; gap: 5px 8px;
+  border-bottom: 0; padding-bottom: 8px;
+}
+.water-record-view .record-amount-spacer,
+.water-record-view .record-amount-field .record-clear-btn { display: none; }
+.water-record-view .record-amount-label { grid-column: 1 / -1; text-align: center; font-weight: 400; }
+.water-record-view .record-amount-prefix { font-size: 30px; font-weight: 400; }
+.water-record-view .record-amount-field input {
+  font-size: clamp(36px, 12vw, 60px); font-weight: 300; height: 1.2em;
+  width: 100%; max-width: 260px; cursor: pointer;
+}
+.water-record-view.water-amount-editing .record-gauge-content,
+.water-record-view.water-amount-editing .record-action-dock { visibility: hidden; }
+
+/* The iframe starts hidden: derive all layout dimensions from its live viewport. */
+.water-record-view .gauge-page {
+  --record-ring-size: min(calc(100vw - 24px), calc(var(--app-viewport-height) - 350px), 420px);
+}
+.water-record-view.quick-expense-mode .record-gauge-content { display: none; }
+.water-record-view.quick-expense-mode .gauge-orb {
+  aspect-ratio: auto; height: calc(40dvh - 70px);
+}
+.water-record-view.quick-expense-mode .gauge-stage,
+.water-record-view.quick-expense-mode .home-gauge-content { min-height: 0; }
+.water-record-view[data-mode="record"] .gauge-orb {
+  top: calc((var(--app-viewport-height) + 112px) / 2);
+  height: var(--record-ring-size);
+}
+.water-record-view .record-amount-field { grid-template-columns: auto auto; }
+.water-record-view .record-amount-field input { max-width: 260px; }
+.water-record-view .record-action-dock { bottom: max(32px, env(safe-area-inset-bottom)); }
+.water-record-view .record-status { bottom: 8px; font-size: 12px; }
+.water-record-view[data-mode="record"] .record-head-content { top: 8px; }
+
+body.water-record-view { --page-bg: var(--water-ink,#000); --page-bg-top: var(--water-ink,#000); --page-bg-bottom: var(--water-ink,#000); background: var(--water-ink,#000); }
+.water-record-view .gauge-page,
+.water-record-view #waterKeypad,
+.water-record-view .category-wheel-center { background: var(--water-ink,#000); }
+.water-category-settings #waterQuickCancel,
+.water-category-settings .theme-panel,
+.water-category-settings .release-info-body,
+.water-category-settings .expense-kicker,
+.water-category-settings #syncCategoriesBtn { display: none !important; }
+.water-category-settings #releaseInfoTitle { font-size: 24px; color: #fff; }
+.water-category-settings .release-info-card { background: var(--water-ink,#000) !important; color: #fff; padding: 30px 24px !important; }
+.water-category-settings .settings-scroll-body { padding-bottom: 24px; }
+.water-category-settings .category-settings-panel { background: transparent; border-color: #666; }
+.water-category-settings .category-settings-panel *,
+.water-category-settings .expense-btn { color: #fff; }
+.water-category-settings .category-settings-add,
+.water-category-settings .category-settings-delete,
+.water-category-settings .expense-btn { background: transparent; border-color: #777; }
+.water-category-settings .settings-card:not(.release-info-card) { background: var(--water-ink,#000); color: #fff; }
+.water-category-settings input { background: transparent; color: #fff; border-color: #777; }
+.water-category-settings .category-settings-row { background: transparent; border-color: #777; }
+.water-category-settings .settings-modal.is-page-view .release-info-card { grid-template-rows: auto minmax(0,1fr); }
+.water-category-settings .settings-modal.is-page-view .release-info-actions { display: block; }
+.water-category-settings #closeReleaseInfoBtn { position: fixed; left: 20px; top: 20px; width: 44px; min-height: 44px; padding: 0; font-size: 30px; z-index: 40; }
+.water-category-settings #releaseInfoTitle { margin: 14px 0 26px 38px; }
+.water-category-settings #categorySettingsTitle { display: none; }
+.water-category-settings #categoryAddTitle, .water-category-settings .expense-field > span { color: #fff; }
+
+/* Every dark surface derives from the selected water color. */
+.water-record-view .water-key-grid button,
+.water-record-view .expense-round-btn,
+.water-record-view .datetime-picker-card,
+.water-record-view .time-wheel-shell,
+.water-record-view .calendar-nav-btn,
+.water-record-view .expense-btn.ghost { background:var(--water-panel,#111); border-color:var(--water-line,#444); }
+.water-record-view .water-key-grid button:active { background:var(--water-pressed,#303030); }
+.water-record-view #waterQuickCancel,
+.water-record-view .record-clear-btn,
+.water-record-view .category-segment { color:var(--water-muted,#888); }
+.water-record-view .category-segment.active { color:#fff; }
+.water-record-view #purposeOptions[data-category-count="8"][data-category-depth="0"] .category-segment { width:23%; height:23%; gap:2px; }
+.water-record-view #purposeOptions[data-category-count="8"][data-category-depth="0"] .category-segment svg { width:clamp(32px,56%,48px); }
+.water-record-view #purposeOptions[data-category-count="8"][data-category-depth="0"] .category-segment span { margin-top:0; font-size:15px; }
+.water-record-view .record-gauge-content .category-wheel { --category-highlight:var(--water-panel,#222); --category-divider:var(--water-line,#444); border-color:var(--water-line,#444); }
+.water-record-view .category-divider,
+.water-record-view .time-wheel-shell::before { background:var(--water-line,#444); }
+.water-record-view .category-wheel-center { border-color:var(--water-line,#444); }
+.water-record-view .expense-round-btn.confirm,
+.water-record-view #waterKeypad .quick-expense-continue-btn,
+.water-record-view .expense-btn.primary { background:#fff; color:var(--water-ink,#000) !important; border-color:#fff; }
+.water-record-view #waterKeypad .quick-expense-continue-btn:disabled { background:var(--water-panel,#222); color:var(--water-muted,#888) !important; }
+.water-record-view .record-amount-label,
+.water-record-view .record-time-label,
+.water-record-view .record-category-label,
+.water-record-view .center-label { color:var(--water-muted,#999) !important; }
+.water-record-view.quick-expense-mode .gauge-center strong:empty::after { color:var(--water-muted,#888); }
+body.water-inline-dialog { background:transparent !important; }
+.water-inline-dialog .gauge-page, .water-inline-dialog #waterQuickCancel { display:none !important; }
+.water-inline-dialog .settings-card { background:var(--water-ink,#000) !important; border-color:var(--water-line,#444); }
+.water-record-view.quick-expense-mode #waterKeypad,
+.water-record-view.water-amount-editing #waterKeypad { background:var(--water-ink,#000); }
+.water-record-view .home-gauge-content,
+.water-record-view .gauge-center,
+.water-record-view .quick-expense-continue-btn { transition: none; }
+/* Match the history page's flat surfaces and the app's theme-colored controls. */
+.water-page-view #deleteConfirmBackdrop { background:rgba(0,0,0,.22); backdrop-filter:none; }
+.water-page-view #deleteConfirmModal .delete-confirm-card {
+  width:min(calc(100vw - 48px),360px); padding:28px 24px 24px;
+  background:#fff; color:var(--water-ink,#000); border:1px solid var(--water-ink,#000);
+  border-radius:24px; box-shadow:none; font-family:system-ui,sans-serif;
+}
+.water-page-view #deleteConfirmKicker { display:none; }
+.water-page-view #deleteConfirmTitle { margin:0; color:inherit; font:400 24px/1.35 system-ui,sans-serif; }
+.water-page-view #deleteConfirmText { margin:16px 0 0; color:#666; font:400 16px/1.6 system-ui,sans-serif; overflow-wrap:anywhere; }
+.water-page-view #deleteConfirmModal .delete-confirm-actions { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:28px; }
+.water-page-view #deleteConfirmModal .expense-btn {
+  min-width:0; min-height:48px; padding:12px 16px; border:1px solid var(--water-ink,#000);
+  border-radius:999px; box-shadow:none; font:400 16px/1.35 system-ui,sans-serif;
+}
+.water-page-view #cancelDeleteExpenseBtn { background:#fff; color:var(--water-ink,#000); }
+.water-page-view #confirmDeleteExpenseBtn { background:var(--water-ink,#000); color:#fff; }
+.water-page-view #deleteConfirmModal .expense-btn:active { opacity:.7; }
+.water-page-view #deleteConfirmModal .expense-btn:focus-visible { outline:2px solid var(--water-ink,#000); outline-offset:4px; }

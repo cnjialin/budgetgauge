@@ -1,0 +1,31 @@
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.13.0' }
+}
+apply plugin: 'com.android.application'
+repositories { google(); mavenCentral() }
+
+android {
+    namespace 'com.codex.waterdemo'
+    compileSdk 36
+    buildToolsVersion '36.1.0'
+    defaultConfig {
+        applicationId 'com.codex.waterdemo'
+        minSdk 24
+        targetSdk 36
+        versionCode 1
+        versionName '0.1-test'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    sourceSets.main.assets.srcDir layout.buildDirectory.dir('generated/water-assets')
+}
+
+def copyDemo = tasks.register('copyWaterDemo', Copy) {
+    from('../public/water-demo.html')
+    into(layout.buildDirectory.dir('generated/water-assets'))
+    rename { 'index.html' }
+}
+tasks.named('preBuild').configure { dependsOn(copyDemo) }

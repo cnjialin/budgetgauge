@@ -1,5 +1,6 @@
-﻿import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
+import { waterAuth, waterLedger } from "./water-auth.js";
 import { SunburstChart } from "echarts/charts";
 import { GraphicComponent, TooltipComponent } from "echarts/components";
 import { init, use } from "echarts/core";
@@ -8,6 +9,18 @@ import { CanvasRenderer } from "echarts/renderers";
 import { version as packageVersion } from "./package.json";
 
 const APP_RELEASE_TAG = `v${packageVersion}`;
+// Reuse the existing editor inside the standalone water design preview.
+const isWaterPageView = window.name === "water-page-preview";
+const isWaterRecordView = window.name === "water-record-preview" || isWaterPageView;
+let waterBrowsePage='history',waterEdgeGesture=null,waterStatsWaiting=false;
+let waterBrowseOpening=false,waterPendingBrowseData=null;
+function applyWaterBrowseData(record) {
+  expenseHistory=(record.records||[]).map(r=>({...r,amount:Number(r.amount)}));
+  monthlyBudgetLimit=record.quota;
+  rebuildMonthHistorySummaryForCurrentData();
+  if(!isExpenseMode){renderHistory();refreshStatsIfVisible();}
+}
+let waterSavePending = false;
 const REMOTE_APP_VERSION_URL = "https://raw.githubusercontent.com/cnjialin/budgetgauge/main/package.json";
 const GITHUB_RELEASES_PAGE_URL = "https://github.com/cnjialin/budgetgauge/releases";
 const GITHUB_RELEASE_APK_URL_TEMPLATE = "https://github.com/cnjialin/budgetgauge/releases/download/{tag}/app-release.apk";
@@ -166,7 +179,7 @@ let stagedGaugeAnimationFrame = 0;
 let gaugeAnimationToken = 0;
 let hasPlayedInitialGaugeAnimation = false;
 let shouldReplayGaugeAnimationOnVisible = false;
-let supabase = createSupabaseClient(supabaseUrl, supabaseKey);
+let supabase = isWaterRecordView ? null : createSupabaseClient(supabaseUrl, supabaseKey);
 let isBudgetOnlySettingsMode = false;
 let activeMainView = "home";
 let isExpenseMode = false;
@@ -194,6 +207,12 @@ const GAUGE_RADIUS = 154;
 const GAUGE_START_ANGLE = -135;
 const GAUGE_END_ANGLE = 135;
 const CATEGORY_ICON_PATHS = {
+  cat: `
+    <g transform="translate(4.56 4.56) scale(.62)" stroke-width="1.774">
+      <path d="M5 10 4 3l6 4a11 11 0 0 1 4 0l6-4-1 7c1.3 1.2 2 2.8 2 4.5C21 19 17 21 12 21S3 19 3 14.5C3 12.8 3.7 11.2 5 10Z"></path>
+      <path d="M8 12v1m8-1v1m-5 3h2l-1 1-1-1Zm1 1v1m-6-2-4-1m4 3-4 1m16-3 4-1m-4 3 4 1"></path>
+    </g>
+  `,
   food: `
     <path d="M8 9.5h8v2.2a4 4 0 0 1-8 0Z"></path>
     <path d="M6.5 9.5h11"></path>
@@ -242,7 +261,7 @@ const CATEGORY_ICON_PATHS = {
     <circle cx="15.5" cy="15.5" r="1.5"></circle>
   `,
 };
-const EXPENSE_CATEGORIES = [
+const LEGACY_EXPENSE_CATEGORIES = [
   {
     id: "food",
     label: "餐饮",
@@ -327,6 +346,54 @@ const EXPENSE_CATEGORIES = [
     ],
   },
 ];
+const EXPENSE_CATEGORIES = [
+  {id:'food',label:'餐饮',icon:'food',children:[
+    {id:'canteen',label:'食堂',icon:'food'},
+    {id:'restaurant',label:'餐馆',icon:'food'},
+    {id:'street-food',label:'小吃',icon:'food'},
+    {id:'snacks-drinks',label:'零食饮料',icon:'food'},
+    {id:'food-other',label:'其他',icon:'other'},
+  ]},
+  {id:'transport',label:'交通',icon:'transport',children:[
+    {id:'public-transit',label:'公共交通',icon:'transport'},
+    {id:'taxi',label:'打车',icon:'transport'},
+    {id:'train',label:'火车',icon:'transport'},
+    {id:'flight',label:'飞机',icon:'transport'},
+    {id:'transport-other',label:'其他',icon:'other'},
+  ]},
+  {id:'shopping',label:'购物',icon:'shopping',children:[
+    {id:'daily',label:'日用品',icon:'shopping'},
+    {id:'clothes',label:'衣物',icon:'shopping'},
+    {id:'digital',label:'数码',icon:'shopping'},
+    {id:'shopping-other',label:'其他',icon:'other'},
+  ]},
+  {id:'home',label:'住房',icon:'home',children:[
+    {id:'rent',label:'房租',icon:'home'},
+    {id:'water-bill',label:'水费',icon:'home'},
+    {id:'electricity',label:'电费',icon:'home'},
+    {id:'gas',label:'燃气',icon:'home'},
+    {id:'home-other',label:'其他',icon:'other'},
+  ]},
+  {id:'fun',label:'娱乐',icon:'fun',children:[
+    {id:'movie',label:'电影',icon:'fun'},
+    {id:'game',label:'游戏',icon:'fun'},
+    {id:'travel',label:'旅行',icon:'fun'},
+    {id:'fun-other',label:'其他',icon:'other'},
+  ]},
+  {id:'health',label:'健康',icon:'health',children:[
+    {id:'medical',label:'医疗',icon:'health'},
+    {id:'fitness',label:'运动',icon:'health'},
+    {id:'health-other',label:'其他',icon:'other'},
+  ]},
+  {id:'huya',label:'虎牙',icon:'cat',children:[
+    {id:'huya-food',label:'吃',icon:'food'},
+    {id:'huya-litter',label:'拉',icon:'other'},
+    {id:'huya-play',label:'玩',icon:'fun'},
+    {id:'huya-medical',label:'医',icon:'health'},
+    {id:'huya-other',label:'其他',icon:'other'},
+  ]},
+  {id:'other',label:'其他',icon:'other'},
+];
 const CATEGORY_START_ANGLE = -90;
 const CATEGORY_BUTTON_RADIUS = 31;
 const PREVIOUS_STATS_CATEGORY_COLORS = [
@@ -362,7 +429,7 @@ async function initialize() {
   disableDataScopeButton();
   setupKeyboardViewport();
   hydrateInitialExpenseHistory();
-  playInitialGaugeAnimation();
+  if (!isWaterRecordView) playInitialGaugeAnimation();
 
   openExpenseModalBtn.addEventListener("click", handleGaugeCenterClick);
   remainingBudgetEl.addEventListener("click", handleGaugeCenterClick);
@@ -427,8 +494,169 @@ async function initialize() {
   document.addEventListener("touchstart", handleDocumentTouchStart, { passive: true });
   document.addEventListener("touchmove", handleDocumentTouchMove, { passive: false });
 
-  hydrateSupabaseState();
-  checkForAppUpdate();
+  if (isWaterRecordView) {
+    document.body.classList.add("water-record-view");
+    if(isWaterPageView){
+      document.body.classList.add('water-page-view');
+      let suppressBrowseClickUntil=0;
+      const startBrowseSwipe=(point,target)=>{
+        waterEdgeGesture=null;
+        if(isExpenseMode||!deleteConfirmModal.hidden||target.closest('input,textarea,select')||
+          (historyModal.hidden&&statsModal.hidden))return;
+        waterEdgeGesture={x:point.clientX,y:point.clientY,time:performance.now(),axis:null};
+      };
+      const moveBrowseSwipe=(point,event)=>{
+        const gesture=waterEdgeGesture;if(!gesture)return;
+        const dx=point.clientX-gesture.x,dy=point.clientY-gesture.y;
+        if(!gesture.axis&&Math.max(Math.abs(dx),Math.abs(dy))>=10) {
+          if(Math.abs(dy)>Math.abs(dx)*1.1)gesture.axis='vertical';
+          else if(Math.abs(dx)>Math.abs(dy)*1.15)gesture.axis='horizontal';
+        }
+        if(gesture.axis==='horizontal') {
+          if(event.cancelable)event.preventDefault();
+          clearHistoryDeleteHoldTimer();
+        }
+      };
+      const endBrowseSwipe=point=>{
+        const gesture=waterEdgeGesture;waterEdgeGesture=null;if(!gesture)return;
+        const dx=point.clientX-gesture.x,dy=point.clientY-gesture.y;
+        if(gesture.axis==='vertical')return;
+        const horizontal=gesture.axis==='horizontal'||Math.abs(dx)>Math.abs(dy)*1.15;
+        const distance=Math.abs(dx),speed=distance/Math.max(1,performance.now()-gesture.time);
+        if(horizontal&&distance>10)suppressBrowseClickUntil=performance.now()+400;
+        const enough=distance>=Math.min(42,innerWidth*.1)||(distance>=24&&speed>.35);
+        if(horizontal&&enough&&(waterBrowsePage==='history'?dx<0:dx>0))notifyWaterEditor('page-close');
+      };
+      // Touch events survive the pointercancel emitted when Android starts a pan.
+      // Lock the direction early: vertical gestures remain native list scrolling.
+      document.addEventListener('touchstart',event=>{
+        if(event.touches.length===1)startBrowseSwipe(event.touches[0],event.target);
+        else waterEdgeGesture=null;
+      },{passive:true,capture:true});
+      document.addEventListener('touchmove',event=>{
+        if(event.touches.length===1)moveBrowseSwipe(event.touches[0],event);
+        else waterEdgeGesture=null;
+      },{passive:false,capture:true});
+      document.addEventListener('touchend',event=>{
+        if(event.changedTouches[0])endBrowseSwipe(event.changedTouches[0]);
+      },{passive:true,capture:true});
+      document.addEventListener('touchcancel',()=>{waterEdgeGesture=null;},{passive:true});
+      document.addEventListener('pointerdown',event=>{if(event.pointerType!=='touch')startBrowseSwipe(event,event.target);});
+      document.addEventListener('pointermove',event=>{if(event.pointerType!=='touch')moveBrowseSwipe(event,event);});
+      document.addEventListener('pointerup',event=>{if(event.pointerType!=='touch')endBrowseSwipe(event);});
+      document.addEventListener('pointercancel',event=>{if(event.pointerType!=='touch')waterEdgeGesture=null;});
+      document.addEventListener('click',event=>{
+        if(performance.now()<suppressBrowseClickUntil){event.preventDefault();event.stopImmediatePropagation();}
+      },true);
+    }
+    expenseAmountInput.readOnly = true;
+    expenseAmountInput.type = "text";
+    expenseAmountInput.inputMode = "none";
+    document.querySelector("#waterKeypad")?.addEventListener("click", (event) => {
+      const key = event.target.closest("[data-amount-key]")?.dataset.amountKey;
+      if (key) handleWaterAmountKey(key);
+    });
+    document.querySelector("#waterQuickCancel")?.addEventListener("click", () => notifyWaterEditor("cancel"));
+    window.addEventListener("message", (event) => {
+      if (event.source !== parent || event.data?.channel !== "water-editor") return;
+      if(isWaterPageView && event.data.action==='browse-data') {
+        if(waterBrowseOpening)waterPendingBrowseData=event.data.record;
+        else applyWaterBrowseData(event.data.record);
+        return;
+      }
+      if(isWaterPageView && event.data.action==='browse-open') {
+        if(waterPendingBrowseData){applyWaterBrowseData(waterPendingBrowseData);waterPendingBrowseData=null;}
+        waterBrowseOpening=true;
+        waterBrowsePage=event.data.record.page;
+        closeExpenseModal({waterInternal:true,render:false,focus:false});
+        closeDeleteConfirmModal();
+        waterStatsWaiting=waterBrowsePage==='stats';
+        if(waterBrowsePage==='history')openHistoryModal();else openStatsModal({deferAnimation:true});
+        notifyWaterEditor('page-prepared',{page:waterBrowsePage});
+        return;
+      }
+      if(isWaterPageView && event.data.action==='browse-entered') {
+        waterBrowseOpening=false;
+        if(waterPendingBrowseData){applyWaterBrowseData(waterPendingBrowseData);waterPendingBrowseData=null;}
+        if(waterStatsWaiting&&!statsModal.hidden){
+          waterStatsWaiting=false;expenseSunburstChart.style.visibility='visible';
+          renderExpenseStats({prepareInitialAnimation:true,resizeAfterRender:false});
+        }
+        return;
+      }
+      if(isWaterPageView && event.data.action==='browse-result') {
+        confirmExpenseBtn.disabled=false;cancelExpenseBtn.disabled=false;
+        if(event.data.record.error){expenseStatus.textContent=event.data.record.error;document.querySelector('#browseStatus').textContent=event.data.record.error;return;}
+        document.querySelector('#browseStatus').textContent='';
+        closeExpenseModal({waterInternal:true,render:false,focus:false});openHistoryModal();return;
+      }
+      if(isWaterPageView && event.data.action==='browse-back') {
+        if(!deleteConfirmModal.hidden){closeDeleteConfirmModal();return;}
+        if(isExpenseMode){closeExpenseModal({waterInternal:true,render:false,focus:false});openHistoryModal();return;}
+        notifyWaterEditor('page-close');return;
+      }
+      if(['ledger-load','ledger-save','ledger-update','ledger-delete'].includes(event.data.action)) {
+        waterLedger(event.data.action,event.data.record,notifyWaterEditor);return;
+      }
+      if(['auth-init','auth-login','auth-logout','auth-reconnect'].includes(event.data.action)) {
+        waterAuth(event.data.action,event.data.record,notifyWaterEditor);return;
+      }
+      if(event.data.action === "dismiss") {
+        document.activeElement?.blur();
+        closeDateTimePicker();closeCategoryAddModal();closeDeleteConfirmModal();
+        closeExpenseModal({waterInternal:true,render:false,focus:false});
+        closeQuickExpenseEntry({render:false,focus:false});
+      }
+      if(event.data.action === "ink" && /^#[0-9a-f]{6}$/i.test(event.data.color)) {
+        const inkChanged=document.documentElement.style.getPropertyValue('--water-ink').toLowerCase()!==event.data.color.toLowerCase();
+        document.documentElement.style.setProperty("--water-ink",event.data.color);
+        const rgb=event.data.color.slice(1).match(/../g).map(x=>parseInt(x,16));
+        const tint=ratio=>'#'+rgb.map(x=>Math.round(x+(255-x)*ratio).toString(16).padStart(2,'0')).join('');
+        for(const [key,ratio] of [['panel',.07],['pressed',.17],['line',.28],['muted',.55]])document.documentElement.style.setProperty('--water-'+key,tint(ratio));
+        if(inkChanged&&isWaterPageView&&!waterBrowseOpening)refreshStatsIfVisible();
+      }
+      if(event.data.action === "categories-data") notifyWaterEditor("categories-data",expenseCategories);
+      if(["category-add","category-delete"].includes(event.data.action)) {
+        document.body.classList.add("water-category-settings","water-inline-dialog");
+        const path=event.data.path;
+        if(!Array.isArray(path)||path.length>3||!path.every(x=>Number.isInteger(x)&&x>=0))return;
+        if(event.data.action === "category-add")promptAddCategory(path);else confirmDeleteCategoryAtPath(path);
+      }
+      if(event.data.action === "categories") {
+        closeExpenseModal({waterInternal:true,render:false,focus:false});
+        document.body.classList.add("water-category-settings");
+        openReleaseInfoModal();
+        document.querySelector("#releaseInfoTitle").textContent="分类设置";
+        closeReleaseInfoBtn.textContent="‹";
+        closeReleaseInfoBtn.setAttribute("aria-label","返回设置");
+      }
+      if (event.data.action === "open") {
+        document.body.classList.remove("water-inline-dialog");
+        document.body.classList.remove("water-category-settings");
+        hidePageView(releaseInfoModal);
+        setActiveMainView("home");
+        document.body.classList.remove("water-amount-editing");
+        syncViewportMetrics();
+        closeExpenseModal({ waterInternal: true, render: false, focus: false });
+        closeQuickExpenseEntry({ render: false });
+        openQuickExpenseEntry();
+      }
+      if (event.data.action === "save-result") {
+        waterSavePending = false;
+        confirmExpenseBtn.disabled = false;
+        cancelExpenseBtn.disabled = false;
+        expenseStatus.textContent = event.data.error || "";
+      }
+    });
+    notifyWaterEditor("ready");
+  } else {
+    hydrateSupabaseState();
+    checkForAppUpdate();
+  }
+}
+
+function notifyWaterEditor(action, record) {
+  if (isWaterRecordView) parent.postMessage({ channel: "water-editor", action, record }, "*");
 }
 
 function setupKeyboardViewport() {
@@ -451,7 +679,7 @@ function syncViewportMetrics() {
 
   viewportMetricsFrame = requestAnimationFrame(() => {
     viewportMetricsFrame = 0;
-    if (isQuickExpenseMode) {
+    if (isQuickExpenseMode && !isWaterRecordView) {
       document.documentElement.style.setProperty("--keyboard-inset", "0px");
       document.body.classList.remove("keyboard-open");
       return;
@@ -613,14 +841,19 @@ function openExpenseModal(options = {}) {
   syncDateTimeTriggerLabel();
   closeDateTimePicker();
   expenseAmountInput.value = editRecord ? formatOptionalNumberInput(Number(editRecord.amount || 0)) : initialAmount;
+  if (isWaterRecordView) syncWaterAmountSize();
   expensePurposeInput.value = editRecord ? formatCategoryPathInput(getRecordPurposeList(editRecord)) : "";
   expenseStatus.textContent = editRecord
     ? "正在修改这笔消费"
-    : currentSession ? "" : "当前未登录，保存将只写入本地历史";
+    : isWaterRecordView || currentSession ? "" : "当前未登录，保存将只写入本地历史";
   resetCategoryState();
 }
 
 function closeExpenseModal(options = {}) {
+  if (isWaterRecordView && !options.waterInternal) {
+    if (!waterSavePending) notifyWaterEditor("cancel");
+    return;
+  }
   closeDateTimePicker();
   isExpenseMode = false;
   editingExpenseRecord = null;
@@ -636,7 +869,7 @@ function closeExpenseModal(options = {}) {
 }
 
 function openQuickExpenseEntry() {
-  if (isExpenseMode || activeMainView !== "home") {
+  if (isExpenseMode || isQuickExpenseMode || activeMainView !== "home") {
     return;
   }
 
@@ -646,8 +879,9 @@ function openQuickExpenseEntry() {
   centerLabelEl.textContent = "消费";
   quickExpenseAmountInput.value = "";
   remainingBudgetEl.textContent = "";
-  remainingBudgetEl.contentEditable = "true";
-  remainingBudgetEl.inputMode = "decimal";
+  if (isWaterRecordView) syncWaterAmountSize();
+  remainingBudgetEl.contentEditable = isWaterRecordView ? "false" : "true";
+  remainingBudgetEl.inputMode = isWaterRecordView ? "none" : "decimal";
   remainingBudgetEl.enterKeyHint = "next";
   remainingBudgetEl.setAttribute("role", "textbox");
   remainingBudgetEl.setAttribute("aria-label", "消费金额");
@@ -686,6 +920,10 @@ function closeQuickExpenseEntry(options = {}) {
 function continueQuickExpenseEntry(event) {
   event?.preventDefault();
   event?.stopPropagation();
+  if (isWaterRecordView && isExpenseMode) {
+    if (Number(expenseAmountInput.value) > 0) document.body.classList.remove("water-amount-editing");
+    return;
+  }
   const amount = getQuickExpenseAmount();
 
   if (amount <= 0) {
@@ -717,11 +955,13 @@ function handleQuickExpenseInputKeydown(event) {
 
   if (event.key === "Escape") {
     event.preventDefault();
+    if (isWaterRecordView) { notifyWaterEditor("cancel"); return; }
     closeQuickExpenseEntry();
   }
 }
 
 function focusQuickExpenseAmountInput() {
+  if (isWaterRecordView) return;
   remainingBudgetEl.focus({ preventScroll: true });
   moveCaretToEditableEnd(remainingBudgetEl);
 }
@@ -778,6 +1018,11 @@ function handleRecordAmountClick() {
 }
 
 function focusExpenseAmountInput() {
+  if (isWaterRecordView) {
+    document.body.classList.add("water-amount-editing");
+    quickExpenseContinueBtn.disabled = Number(expenseAmountInput.value) <= 0;
+    return;
+  }
   expenseAmountInput.focus({ preventScroll: true });
 
   const valueLength = expenseAmountInput.value.length;
@@ -812,6 +1057,7 @@ function handleUsageTextKeydown(event) {
 }
 
 function handleGaugePageClick(event) {
+  if (isWaterRecordView) return;
   if (!isQuickExpenseMode) {
     return;
   }
@@ -871,6 +1117,32 @@ function setActiveMainView(nextView) {
   openHistoryBtn.toggleAttribute("aria-current", nextView === "history");
   openStatsBtn.toggleAttribute("aria-current", nextView === "stats");
   openSettingsBtn.setAttribute("aria-expanded", String(nextView === "release"));
+}
+
+function handleWaterAmountKey(key) {
+  if (!isQuickExpenseMode && !document.body.classList.contains("water-amount-editing")) return;
+  let value = isExpenseMode ? expenseAmountInput.value : remainingBudgetEl.textContent;
+  if (key === "backspace") value = value.slice(0, -1);
+  else if (key === ".") {
+    if (value.includes(".")) return;
+    value = (value || "0") + ".";
+  } else if (/^\d$/.test(key)) {
+    if (value.includes(".") && value.split(".")[1].length >= 2) return;
+    if (!value.includes(".") && value.length >= 8) return;
+    value = value === "0" ? key : value + key;
+  } else return;
+  if (isExpenseMode) expenseAmountInput.value = value;
+  else remainingBudgetEl.textContent = value;
+  syncWaterAmountSize();
+  quickExpenseContinueBtn.disabled = Number(value) <= 0;
+}
+
+function syncWaterAmountSize() {
+  const quickLength = (remainingBudgetEl.textContent || "0.00").length;
+  remainingBudgetEl.style.fontSize = `clamp(24px, ${Math.min(16, 130 / (quickLength + 2))}vw, 72px)`;
+  const value = expenseAmountInput.value || "0.00";
+  expenseAmountInput.style.width = `${Math.max(2, value.length) + .2}ch`;
+  expenseAmountInput.style.fontSize = `clamp(24px, ${Math.min(12, 66 / Math.max(3, value.length))}vw, 60px)`;
 }
 
 function showPageView(pageEl, { animate = false } = {}) {
@@ -984,6 +1256,7 @@ function closeSettingsModal(options = {}) {
 }
 
 async function openHistoryModal() {
+  if(isWaterPageView)setHistoryRange('month',false);
   closeQuickExpenseEntry({ render: false, focus: false });
   renderHistory();
   hidePageView(settingsModal);
@@ -997,6 +1270,7 @@ async function openHistoryModal() {
 }
 
 function closeHistoryModal() {
+  if(isWaterPageView){notifyWaterEditor('page-close');return;}
   closeDeleteConfirmModal();
   hidePageView(historyModal);
   historyCard.setAttribute("role", "dialog");
@@ -1006,7 +1280,7 @@ function closeHistoryModal() {
   openHistoryBtn.focus();
 }
 
-function openStatsModal() {
+function openStatsModal({deferAnimation=false}={}) {
   closeQuickExpenseEntry({ render: false, focus: false });
   resetExpenseStatsChart();
   hidePageView(settingsModal);
@@ -1016,6 +1290,12 @@ function openStatsModal() {
   statsCard.setAttribute("role", "region");
   statsCard.removeAttribute("aria-modal");
   setActiveMainView("stats");
+  if(deferAnimation){
+    const {total}=buildExpenseSunburstData();
+    statsEmptyState.hidden=total>0;expenseSunburstChart.hidden=total<=0;
+    expenseSunburstChart.style.visibility='hidden';
+    return;
+  }
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       if (statsModal?.hidden) {
@@ -1028,6 +1308,7 @@ function openStatsModal() {
 }
 
 function closeStatsModal() {
+  if(isWaterPageView){notifyWaterEditor('page-close');return;}
   hidePageView(statsModal);
   statsCard.setAttribute("role", "dialog");
   statsCard.setAttribute("aria-modal", "true");
@@ -1037,6 +1318,7 @@ function closeStatsModal() {
 }
 
 function handleHistorySwipeStart(event) {
+  if(isWaterPageView)return;
   if (historyModal.hidden) {
     return;
   }
@@ -1141,6 +1423,10 @@ function openReleaseInfoModal(options = {}) {
 }
 
 function closeReleaseInfoModal(options = {}) {
+  if(isWaterRecordView && document.body.classList.contains("water-category-settings")) {
+    document.body.classList.remove("water-category-settings");
+    notifyWaterEditor("categories-close");
+  }
   closeCategoryAddModal();
   hidePageView(releaseInfoModal, options);
   releaseInfoModal.querySelector(".release-info-card")?.setAttribute("role", "dialog");
@@ -1150,6 +1436,7 @@ function closeReleaseInfoModal(options = {}) {
 }
 
 async function confirmExpense() {
+  if (isWaterRecordView && waterSavePending) return;
   const timestamp = serializeTimestamp(selectedExpenseDateTime);
   const amount = sanitizeNumber(expenseAmountInput.value);
   const purposeList = resolvePurposeList();
@@ -1163,6 +1450,19 @@ async function confirmExpense() {
   if (amount <= 0) {
     expenseAmountInput.focus();
     expenseStatus.textContent = "请输入大于 0 的消费金额。";
+    return;
+  }
+
+  if (isWaterRecordView) {
+    if(isWaterPageView && editingExpenseRecord) {
+      confirmExpenseBtn.disabled=true;cancelExpenseBtn.disabled=true;expenseStatus.textContent='正在保存…';
+      notifyWaterEditor('page-update',{id:editingExpenseRecord.id,amount,category:purposeList,time:timestamp});return;
+    }
+    waterSavePending = true;
+    confirmExpenseBtn.disabled = true;
+    cancelExpenseBtn.disabled = true;
+    expenseStatus.textContent = "正在保存…";
+    notifyWaterEditor("save", { amount, category: purposeList, purpose: purposeList.join(" "), time: timestamp });
     return;
   }
 
@@ -1606,8 +1906,10 @@ function renderCategoryWheel(categories = expenseCategories, options = {}) {
   const shouldAnimate = Boolean(options.animate);
   const normalizedCategories = categories.filter((category) => category?.label);
   const count = normalizedCategories.length;
+  purposeWheel.dataset.categoryCount = String(count);
   currentCategoryNodes = normalizedCategories;
   currentCategoryDepth = currentCategoryPath.length;
+  purposeWheel.dataset.categoryDepth = String(currentCategoryDepth);
   categoryOptions.classList.remove("is-entering");
   categoryDividers.classList.remove("is-entering");
   categoryOptions.innerHTML = "";
@@ -1621,12 +1923,13 @@ function renderCategoryWheel(categories = expenseCategories, options = {}) {
   }
 
   const step = 360 / count;
-  const offset = CATEGORY_START_ANGLE + 90 - step / 2;
+  const startAngle = CATEGORY_START_ANGLE + (count === 8 ? step / 2 : 0);
+  const offset = startAngle + 90 - step / 2;
   purposeWheel.style.setProperty("--category-step", `${step}deg`);
   purposeWheel.style.setProperty("--category-highlight-start", `${offset}deg`);
 
   normalizedCategories.forEach((category, index) => {
-    const centerAngle = CATEGORY_START_ANGLE + step * index;
+    const centerAngle = startAngle + step * index;
     const position = getCategoryPosition(centerAngle, CATEGORY_BUTTON_RADIUS);
     const button = document.createElement("button");
     button.className = "category-segment purpose-chip";
@@ -1649,7 +1952,7 @@ function renderCategoryWheel(categories = expenseCategories, options = {}) {
 
     const divider = document.createElement("span");
     divider.className = "category-divider";
-    divider.style.transform = `rotate(${CATEGORY_START_ANGLE + step * (index + 0.5) - 90}deg)`;
+    divider.style.transform = `rotate(${startAngle + step * (index + 0.5) - 90}deg)`;
     divider.style.setProperty("--category-enter-index", String(index));
     categoryDividers.appendChild(divider);
   });
@@ -1701,6 +2004,7 @@ async function updateExpenseRecord(record, nextRecord) {
 }
 
 async function deleteExpenseRecord(record) {
+  if(isWaterPageView){notifyWaterEditor('page-delete',{id:record.id});return;}
   const previousHistory = [...expenseHistory];
   expenseHistory = expenseHistory.filter((item) => item !== record);
   rebuildMonthHistorySummaryForCurrentData();
@@ -1995,6 +2299,9 @@ function closeCategoryAddModal() {
   pendingAddCategoryParentPath = null;
   categoryAddModal.hidden = true;
   categoryAddStatus.textContent = "";
+  if(isWaterRecordView && document.body.classList.contains("water-inline-dialog")) {
+    notifyWaterEditor("categories-data",expenseCategories);notifyWaterEditor("categories-close");
+  }
 }
 
 function handleCategoryAddInputKeydown(event) {
@@ -2453,6 +2760,7 @@ function saveExpenseCategories() {
   }
 
   localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(expenseCategories));
+  if(isWaterRecordView)notifyWaterEditor("categories-data",expenseCategories);
 }
 
 function loadExpenseCategories() {
@@ -2465,6 +2773,8 @@ function loadExpenseCategories() {
   try {
     const parsed = JSON.parse(stored);
     const normalized = normalizeExpenseCategoryTree(parsed);
+    // Upgrade the unchanged old default; retain user-customized category trees.
+    if (JSON.stringify(normalized) === JSON.stringify(normalizeExpenseCategoryTree(LEGACY_EXPENSE_CATEGORIES))) return fallback;
     return normalized.length ? normalized : fallback;
   } catch {
     return fallback;
@@ -2520,6 +2830,7 @@ function getCategoryButtonMarkup(category) {
 
 function resolveCategoryIcon(category) {
   const icon = category?.icon;
+  if (category?.label === '虎牙' && (!icon || icon === 'other')) return 'cat';
   if (CATEGORY_ICON_PATHS[icon] && !(icon === "other" && category?.label === "健康")) {
     return icon;
   }
@@ -2661,7 +2972,7 @@ function setPurposeWheelHighlight(purpose) {
 
   const count = Math.max(purposeOptions.length, 1);
   const step = 360 / count;
-  const offset = CATEGORY_START_ANGLE + 90 - step / 2;
+  const offset = CATEGORY_START_ANGLE + (count === 8 ? step / 2 : 0) + 90 - step / 2;
   const start = activeIndex * step;
   const end = (activeIndex + 1) * step;
   purposeWheel.dataset.activePurpose = purpose;
@@ -2735,6 +3046,7 @@ function handleDocumentKeydown(event) {
   }
 
   if (event.key === "Escape" && isQuickExpenseMode) {
+    if (isWaterRecordView) { notifyWaterEditor("cancel"); return; }
     closeQuickExpenseEntry();
     return;
   }
@@ -3158,6 +3470,7 @@ function setGaugeValueProgress(pathLength, ratio) {
 }
 
 function refreshStatsIfVisible() {
+  if(isWaterPageView&&waterStatsWaiting)return;
   if (!statsModal?.hidden) {
     renderExpenseStats();
   }
@@ -3234,7 +3547,7 @@ function renderExpenseStats(options = {}) {
         radius: [0, "100%"],
         center: ["50%", "50%"],
         nodeClick: "rootToNode",
-        sort: (left, right) => Number(right.value || 0) - Number(left.value || 0),
+        sort: isWaterPageView ? null : (left, right) => Number(right.value || 0) - Number(left.value || 0),
         emphasis: {
           disabled: true,
           focus: "none",
@@ -3441,14 +3754,29 @@ function cleanExpenseStatsNode(node) {
 }
 
 function applyStatsColorsToSunburstData(data) {
+  if(isWaterPageView) {
+    const categoryColors={
+      住房:['#012971','#215193'],餐饮:['#0187c6','#5dafe1'],
+      娱乐:['#01c0c8','#7eddd7'],健康:['#6addc0','#a3ead7'],
+      交通:['#b2e7e3','#c7f0ec'],购物:['#629fd6','#aad1f4'],
+      虎牙:['#b09ddd','#ccc3ee'],其他:['#012971','#215193'],
+    };
+    const categoryOrder=['住房','餐饮','娱乐','健康','交通','其他','购物','虎牙'];
+    const order=name=>{const index=categoryOrder.indexOf(name);return index<0?5:index;};
+    return [...data].sort((a,b)=>order(a.name)-order(b.name)).map(node=>{
+      const [primary,secondary]=categoryColors[node.name]||categoryColors.其他;
+      return applySunburstNodeColor(node,primary,0,[primary,secondary,brightenStatsColor(secondary,.16)]);
+    });
+  }
   return data.map((node, index) => {
     const color = STATS_CATEGORY_COLORS[index % STATS_CATEGORY_COLORS.length];
     return applySunburstNodeColor(node, color, 0);
   });
 }
 
-function applySunburstNodeColor(node, color, depth) {
-  const depthColor = lightenColor(color, Math.min(Math.max(depth, 0), 2) * 0.16);
+function applySunburstNodeColor(node, color, depth, levelColors) {
+  const amount=Math.min(Math.max(depth,0),2)*.16;
+  const depthColor = levelColors ? levelColors[Math.min(depth,levelColors.length-1)] : lightenColor(color,amount);
   const nextNode = {
     ...node,
     itemStyle: {
@@ -3457,11 +3785,38 @@ function applySunburstNodeColor(node, color, depth) {
     },
   };
 
+  if(isWaterPageView) {
+    const channels=parseColorChannels(depthColor)||[0,0,0];
+    const linear=channels.map(value=>{const c=value/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;});
+    const luminance=linear[0]*.2126+linear[1]*.7152+linear[2]*.0722;
+    nextNode.label={...(node.label||{}),color:luminance>.179?'#000000':'#ffffff'};
+    nextNode.itemStyle.borderColor='#ffffff';
+  }
+
   if (node.children?.length) {
-    nextNode.children = node.children.map((child) => applySunburstNodeColor(child, color, depth + 1));
+    nextNode.children = node.children.map((child) => applySunburstNodeColor(child, color, depth + 1,levelColors));
   }
 
   return nextNode;
+}
+
+function brightenStatsColor(color, amount) {
+  const channels=parseColorChannels(color);
+  if(!channels||amount===0)return color;
+  const [r,g,b]=channels.map(value=>value/255);
+  const max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;
+  const lightness=(max+min)/2;
+  const saturation=delta===0?0:delta/(1-Math.abs(2*lightness-1));
+  let hue=0;
+  if(delta>0) {
+    hue=max===r?((g-b)/delta)%6:max===g?(b-r)/delta+2:(r-g)/delta+4;
+    hue=(hue*60+360)%360;
+  }
+  const lifted=lightness+(1-lightness)*amount;
+  const chroma=(1-Math.abs(2*lifted-1))*saturation;
+  const x=chroma*(1-Math.abs((hue/60)%2-1)),m=lifted-chroma/2;
+  const rgb=hue<60?[chroma,x,0]:hue<120?[x,chroma,0]:hue<180?[0,chroma,x]:hue<240?[0,x,chroma]:hue<300?[x,0,chroma]:[chroma,0,x];
+  return `rgb(${rgb.map(value=>Math.round((value+m)*255)).join(', ')})`;
 }
 
 function lightenColor(color, amount) {
@@ -3968,6 +4323,7 @@ function closeDeleteConfirmModal() {
   pendingDeleteExpenseRecord = null;
   pendingDeleteCategoryPath = null;
   deleteConfirmModal.hidden = true;
+  if(isWaterRecordView && document.body.classList.contains("water-inline-dialog"))notifyWaterEditor("categories-close");
 }
 
 async function confirmPendingDelete() {
@@ -4477,12 +4833,15 @@ function sanitizeNumber(value) {
 }
 
 function loadNumber(key, fallback) {
-  const parsed = Number(localStorage.getItem(key));
+  let value;
+  try { value = localStorage.getItem(key); } catch { return fallback; }
+  const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function loadText(key) {
-  return localStorage.getItem(key) || "";
+  if (isWaterRecordView && [SUPABASE_URL_KEY, SUPABASE_KEY_KEY, EMAIL_KEY, PASSWORD_KEY].includes(key)) return "";
+  try { return localStorage.getItem(key) || ""; } catch { return ""; }
 }
 
 function formatOptionalNumberInput(value) {

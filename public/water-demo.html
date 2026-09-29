@@ -75,8 +75,8 @@
     #settingsPage input, #loginPage input { scroll-margin-block:24px; }
     #sideDisk { position:absolute; width:100px; height:100px; border-radius:50%; background:#000; z-index:3; pointer-events:none; transform-origin:center; will-change:transform; }
     #sideDiskFill { position:absolute; inset:0; border-radius:50%; background:#fff; transform-origin:center; }
-    #sidePage { position:absolute; left:0; top:0; width:0; height:0; z-index:4; color:#000; visibility:hidden; touch-action:none; border-radius:50%; overflow:hidden; isolation:isolate; }
-    #sideViewport { position:absolute; width:100vw; height:100vh; background:#fff; }
+    #sidePage { position:absolute; left:0; top:0; width:0; height:0; z-index:4; color:#000; visibility:hidden; touch-action:none; border-radius:50%; overflow:hidden; isolation:isolate; transform-origin:center; will-change:transform; }
+    #sideViewport { position:absolute; width:100vw; height:100vh; background:#fff; transform-origin:0 0; will-change:transform; }
     #sideBack { font-size:30px; padding:0; width:44px; text-align:left; }
     #sideBack { position:absolute; top:20px; left:24px; z-index:2; }
     #sideFrame { position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff; visibility:hidden; }
@@ -178,7 +178,7 @@
   let gravityTargetX = 0, gravityTargetY = 1, gravityX = 0, gravityY = 1;
   const nativeGravity = window.WaterSensors;
   const monthAmount = document.querySelector('#monthAmount');
-  let monthlySpent = 0, monthlyQuota = 8000;
+  let monthlySpent = 0, monthlyQuota = 8000, monthlyLargeExpenseCount=0;
   let displayedMonthAmount=null, monthAmountTarget=null, monthAmountMotion=null, monthAmountDeferred=false;
   function paintMonthAmount(value) {
     displayedMonthAmount=value;
@@ -278,11 +278,15 @@
     try { history = JSON.parse(localStorage.getItem('water-demo-records') || '[]'); } catch {}
     if(ledgerOwner)history=[...cloudRecords,...pendingRecords.filter(p=>!cloudRecords.some(r=>String(r.id)===String(p.id)))];
     const now = new Date();
+    let largeExpenseCount=0;
     const cents = (Array.isArray(history) ? history : []).reduce((total, record) => {
-      const date = new Date(record?.time);
-      return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
-        && Number.isFinite(Number(record.amount)) && Number(record.amount) > 0 ? total + Math.round(Number(record.amount) * 100) : total;
-    }, 0);
+      const date=new Date(record?.time),amount=Number(record?.amount);
+      if(date.getFullYear()!==now.getFullYear()||date.getMonth()!==now.getMonth()||!Number.isFinite(amount)||amount<=0)return total;
+      const recordCents=Math.round(amount*100);
+      if(recordCents>100000)largeExpenseCount++;
+      return total+recordCents;
+    },0);
+    if(monthlyLargeExpenseCount!==largeExpenseCount){monthlyLargeExpenseCount=largeExpenseCount;if(waterStars.length)syncExpenseStars();}
     setMonthAmount(cents/100,animateAmountAfterClose);
     monthlySpent = cents / 100;
     sendSideData();
@@ -391,16 +395,95 @@
     addDrop();
   });
   let COLOR = '#000000';
-  // A uniform field of fine stars, clipped to the live water surface.
+  // Advected particles with local, inertial flow around the moving side-page edge.
   let waterStars = [], starClock = 0, starCurrent = 0;
   let starWaveSamples = new Float64Array(0);
+  let starSurfaceOffset=null, starPageFlow=0, starCavityRadius=0;
+  let starDensity=null;
+  function updateStarDensity() {
+    const cols=Math.max(3,Math.ceil(width/32)),rows=Math.max(3,Math.ceil(height/32));
+    if(!starDensity||starDensity.cols!==cols||starDensity.rows!==rows)
+      starDensity={cols,rows,mass:new Float32Array(cols*rows),vx:new Float32Array(cols*rows),vy:new Float32Array(cols*rows)};
+    const {mass,vx,vy}=starDensity;mass.fill(0);
+    // Bilinear deposition and sampling avoid visible cell boundaries. The field
+    // wraps like the particle material, so screen edges do not attract stars.
+    for(const star of waterStars) {
+      if(star.x<0||star.x>=1||star.y<0||star.y>=1)continue;
+      const gx=star.x*cols,gy=star.y*rows,x=Math.floor(gx),y=Math.floor(gy),fx=gx-x,fy=gy-y;
+      const right=(x+1)%cols,bottom=(y+1)%rows;
+      mass[y*cols+x]+=(1-fx)*(1-fy);mass[y*cols+right]+=fx*(1-fy);
+      mass[bottom*cols+x]+=(1-fx)*fy;mass[bottom*cols+right]+=fx*fy;
+    }
+    const average=Math.max(1,waterStars.length/(cols*rows));
+    for(let y=0;y<rows;y++)for(let x=0;x<cols;x++) {
+      const i=y*cols+x;
+      let dx=(mass[y*cols+(x+cols-1)%cols]-mass[y*cols+(x+1)%cols])/average*3;
+      let dy=(mass[((y+rows-1)%rows)*cols+x]-mass[((y+1)%rows)*cols+x])/average*3;
+      const scale=Math.min(1,4/Math.max(.001,Math.hypot(dx,dy)));
+      vx[i]=dx*scale;vy[i]=dy*scale;
+    }
+  }
+  function diffuseStar(star) {
+    if(star.x<0||star.x>=1||star.y<0||star.y>=1){star.diffuseX=star.diffuseY=0;return;}
+    const {cols,rows,vx,vy}=starDensity;
+    const gx=star.x*cols,gy=star.y*rows,x=Math.floor(gx),y=Math.floor(gy),fx=gx-x,fy=gy-y;
+    const a=y*cols+x,b=y*cols+(x+1)%cols,c=((y+1)%rows)*cols+x,d=((y+1)%rows)*cols+(x+1)%cols;
+    star.diffuseX=(vx[a]*(1-fx)+vx[b]*fx)*(1-fy)+(vx[c]*(1-fx)+vx[d]*fx)*fy;
+    star.diffuseY=(vy[a]*(1-fx)+vy[b]*fx)*(1-fy)+(vy[c]*(1-fx)+vy[d]*fx)*fy;
+  }
   const starsReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  function updateExpenseStarSpacing() {
+    const stars=waterStars.filter(star=>star.expense),reach=64,buckets=new Map();
+    for(let i=0;i<stars.length;i++) {
+      const star=stars[i];star.spacingX=star.spacingY=0;
+      const key=Math.floor(star.x*width/reach)+','+Math.floor(star.y*height/reach);
+      if(!buckets.has(key))buckets.set(key,[]);
+      buckets.get(key).push(i);
+    }
+    for(let i=0;i<stars.length;i++) {
+      const a=stars[i],cx=Math.floor(a.x*width/reach),cy=Math.floor(a.y*height/reach);
+      for(let yy=cy-1;yy<=cy+1;yy++)for(let xx=cx-1;xx<=cx+1;xx++) {
+        for(const j of buckets.get(xx+','+yy)||[]) {
+          if(j<=i)continue;
+          const b=stars[j];let dx=(a.x-b.x)*width,dy=(a.y-b.y)*height,distance=Math.hypot(dx,dy);
+          if(distance>=reach)continue;
+          if(distance<.001){const angle=(i*17+j*31)*2.39996;dx=Math.cos(angle);dy=Math.sin(angle);distance=1;}
+          const push=6*Math.pow(1-distance/reach,2),fx=dx/distance*push,fy=dy/distance*push;
+          a.spacingX+=fx;a.spacingY+=fy;b.spacingX-=fx;b.spacingY-=fy;
+        }
+      }
+    }
+    for(const star of stars) {
+      const scale=Math.min(1,5/Math.max(.001,Math.hypot(star.spacingX,star.spacingY)));
+      star.spacingX*=scale;star.spacingY*=scale;
+    }
+  }
+  function syncExpenseStars() {
+    let existing=waterStars.reduce((sum,star)=>sum+(star.expense?1:0),0);
+    if(existing>monthlyLargeExpenseCount) {
+      let keep=monthlyLargeExpenseCount;
+      waterStars=waterStars.filter(star=>!star.expense||keep-->0);
+    }
+    while(existing++<monthlyLargeExpenseCount) {
+      // Start inside the current pool, without a scan of ledger data per frame.
+      let x=.5,y=.9;
+      const n=waterNormal,min=Math.min(0,width*n.x,height*n.y,width*n.x+height*n.y);
+      const surface=waterOffset+(min-waterOffset)*settingsProgress;
+      for(let attempt=0;attempt<200;attempt++) {
+        x=Math.random();y=Math.random();
+        if(x*width*n.x+y*height*n.y>surface+8)break;
+      }
+      waterStars.push({x,y,radius:4.6,shade:2,speed:.8,edgeVX:0,edgeVY:0,angle:Math.atan2(-gravityX,gravityY),expense:true});
+    }
+  }
   function seedWaterStars() {
+    starSurfaceOffset=null;starPageFlow=0;starCavityRadius=0;
     const count = Math.min(9000, Math.ceil(width * height / 65));
     waterStars = Array.from({length:count}, () => ({
       x:Math.random(), y:Math.random(), radius:.3+Math.random()*.45,
-      shade:Math.floor(Math.random()*3), speed:.65+Math.random()*.7,
+      shade:Math.floor(Math.random()*3), speed:.65+Math.random()*.7, edgeVX:0, edgeVY:0,
     }));
+    syncExpenseStars();
   }
   function drawWaterStars(delta) {
     if(COLOR.toLowerCase() !== '#00105c') return;
@@ -411,13 +494,31 @@
     const n=waterNormal, span=Math.max(1,tangentMax-tangentMin);
     const minProjection=Math.min(0,width*n.x,height*n.y,width*n.x+height*n.y);
     const surfaceOffset=waterOffset+(minProjection-waterOffset)*settingsProgress;
+    // Only the settings fill changes local water coordinates. Login already
+    // translates the entire canvas, carrying particles with it without double motion.
+    const pageOffset=(minProjection-waterOffset)*settingsProgress;
+    const pageShift=starSurfaceOffset===null?0:pageOffset-starSurfaceOffset;
+    starSurfaceOffset=pageOffset;
+    if(dt>0)starPageFlow+=(clamp(pageShift/dt,-900,900)-starPageFlow)*(1-Math.exp(-dt*8));
+    const cover=Math.hypot(Math.max(sideX,width-sideX),Math.max(sideY,height-sideY))+3;
+    const cavityRadius=cover*sideProgress;
+    const radiusBefore=starCavityRadius;
+    const edgeSpeed=dt>0?clamp((cavityRadius-radiusBefore)/dt,-700,700):0;
+    starCavityRadius=cavityRadius;
+    const edgeBand=clamp(width*.18,48,80);
     starCurrent += (-clamp(tiltVelocity,-3,3)*38-starCurrent)*(1-Math.exp(-dt*3.5));
     if(starWaveSamples.length!==N)starWaveSamples=new Float64Array(N);
     for(let i=0;i<N;i++)starWaveSamples[i]=waveOffset(i*width/(N-1))*(1-settingsProgress);
     const recentHits=impacts.slice(-12);
-    // Smooth, divergence-free cross-currents preserve the even distribution.
-    // Each star has its own speed; wrapping avoids respawn flashes at the edges.
+    // Move the material first, then measure its density in the same coordinates.
+    if(dt>0)for(const star of waterStars) {
+      star.x+=n.x*pageShift/width;star.y+=n.y*pageShift/height;
+      star.x=(star.x%1+1)%1;star.y=(star.y%1+1)%1;
+    }
+    updateStarDensity();
+    updateExpenseStarSpacing();
     for(const star of waterStars) {
+      diffuseStar(star);
       const x=star.x*width,y=star.y*height;
       const depth=x*n.x+y*n.y-surfaceOffset;
       const wet=depth>=-20, nearSurface=Math.exp(-Math.max(0,depth)/85);
@@ -426,6 +527,18 @@
       if(wet) {
         const flow=starCurrent*(.3+.7*nearSurface);
         vx+=flow*n.y;vy-=flow*n.x;
+        // A broad circulation carries motion into the interior, with a return
+        // current at depth instead of translating every particle identically.
+        const along=clamp((x*n.y-y*n.x-tangentMin)/span,0,1);
+        const deep=clamp(depth/Math.max(100,height*.65),0,1);
+        const circulation=starCurrent*.65;
+        const tangentFlow=circulation*Math.sin(Math.PI*along)*Math.cos(Math.PI*deep);
+        const normalFlow=-circulation*Math.cos(Math.PI*along)*Math.sin(Math.PI*deep)*.55;
+        vx+=tangentFlow*n.y+normalFlow*n.x;
+        vy-=tangentFlow*n.x-normalFlow*n.y;
+        // Brief residual motion remains after a finger stops moving the fill.
+        const residual=starPageFlow*.08*Math.sin(Math.PI*along);
+        vx+=n.x*residual;vy+=n.y*residual;
         // The same short-lived impacts that deform the water push nearby stars.
         for(const hit of recentHits) {
           const dx=x-hit.worldX,dy=y-hit.worldY,distance=Math.hypot(dx,dy);
@@ -436,14 +549,31 @@
           vx+=dx/distance*push;vy+=dy/distance*push;
         }
       }
-      star.x = (star.x+vx*dt/width+1)%1;
-      star.y = (star.y+vy*dt/height+1)%1;
+      // Only a narrow neighborhood of the moving edge receives an impulse.
+      // The rest of the water retains its own drift; no global radial warp.
+      const edgeDX=x-sideX,edgeDY=y+height*loginProgress-sideY;
+      const edgeDistance=Math.max(.001,Math.hypot(edgeDX,edgeDY));
+      const gap=Math.max(0,Math.min(radiusBefore,cavityRadius)-edgeDistance,edgeDistance-Math.max(radiusBefore,cavityRadius));
+      const reach=gap/edgeBand;
+      const influence=wet&&reach<2?Math.exp(-reach*reach*3)*Math.pow(1-reach/2,2):0;
+      const radial=edgeSpeed*.32*influence;
+      const sideways=edgeSpeed*.28*influence*(edgeDX/edgeDistance);
+      const wantedX=(edgeDX*radial-edgeDY*sideways)/edgeDistance;
+      const wantedY=(edgeDY*radial+edgeDX*sideways)/edgeDistance;
+      const response=1-Math.exp(-dt*(Math.abs(edgeSpeed)>1?18:7));
+      star.edgeVX+=(wantedX-star.edgeVX)*response;
+      star.edgeVY+=(wantedY-star.edgeVY)*response;
+      vx+=star.edgeVX+star.diffuseX+(star.spacingX||0);
+      vy+=star.edgeVY+star.diffuseY+(star.spacingY||0);
+      star.x+=vx*dt/width;star.y+=vy*dt/height;
+      star.x=(star.x%1+1)%1;star.y=(star.y%1+1)%1;
       const u=clamp((star.x*width*n.y-star.y*height*n.x-tangentMin)/span,0,1)*(N-1);
       const i=Math.floor(u),fraction=u-i;
       const wave=starWaveSamples[i]*(1-fraction)+starWaveSamples[Math.min(N-1,i+1)]*fraction;
       const bob=starsReducedMotion.matches?0:wave*.7*nearSurface;
       star.paintX=star.x*width+n.x*bob;
       star.paintY=star.y*height+n.y*bob;
+
     }
     const shades = ['rgba(165,188,255,.28)','rgba(205,219,255,.46)','rgba(245,248,255,.68)'];
     for(let shade=0;shade<shades.length;shade++) {
@@ -451,11 +581,33 @@
       for(const star of waterStars) {
         if(star.shade!==shade)continue;
         const x=star.paintX,y=star.paintY;
-        ctx.moveTo(x+star.radius,y);
-        ctx.arc(x,y,star.radius,0,tau);
+        if(star.expense)continue;
+        ctx.moveTo(x+star.radius,y);ctx.arc(x,y,star.radius,0,tau);
       }
       ctx.fill();
     }
+    // Opaque icy blue keeps the large stars bright against the navy water.
+    ctx.fillStyle='#DDEBFF';ctx.beginPath();
+    for(const star of waterStars) {
+      if(!star.expense)continue;
+      const x=star.paintX,y=star.paintY,r=star.radius,h=r*1.25,k=r*.24;
+      const gravityAngle=Math.atan2(-gravityX,gravityY);
+      const desired=gravityAngle+(starsReducedMotion.matches?0:Math.sin(starClock*.3+star.x*6.28)*.045);
+      if(!Number.isFinite(star.angle))star.angle=gravityAngle;
+      // Align the long axis with gravity. A four-point star has 180° symmetry;
+      // choose the shorter turn so sensor wraparound never causes a full spin.
+      const difference=.5*Math.atan2(Math.sin(2*(desired-star.angle)),Math.cos(2*(desired-star.angle)));
+      star.angle+=difference*(starsReducedMotion.matches?1:1-Math.exp(-dt*3));
+      const cosine=Math.cos(star.angle),sine=Math.sin(star.angle);
+      const points=[[0,-h],[k,-k],[r,0],[k,k],[0,h],[-k,k],[-r,0],[-k,-k]];
+      for(let i=0;i<points.length;i++) {
+        const [px,py]=points[i],xx=x+px*cosine-py*sine,yy=y+px*sine+py*cosine;
+        if(i===0)ctx.moveTo(xx,yy);else ctx.lineTo(xx,yy);
+      }
+      ctx.closePath();
+
+    }
+    ctx.fill();
   }
   try { const saved=localStorage.getItem('water-ink'); if (/^#[0-9a-f]{6}$/i.test(saved)) COLOR=saved; } catch {}
   function applyInk(color) {
@@ -1307,17 +1459,19 @@
         }
         const cover=Math.hypot(Math.max(sideX,width-sideX),Math.max(sideY,height-sideY))+3;
         const radius=cover*sideProgress;
-        // Keep the iframe at a fixed viewport size. Android WebView can flash
-        // composited iframe tiles when its ancestor's clip-path changes each frame.
-        // A rounded overflow window reveals the page without scaling its contents.
+        // Keep both the clipping window and iframe layout size fixed. Resizing
+        // a rounded ancestor every frame can invalidate Android iframe tiles.
+        // Reciprocal compositor transforms reveal the page at its original size.
         const innerRadius=Math.max(0,radius-1.5);
-        sidePage.style.width=sidePage.style.height=(innerRadius*2)+'px';
-        sidePage.style.left=(sideX-innerRadius)+'px';
-        sidePage.style.top=(sideY-innerRadius)+'px';
+        const revealScale=Math.max(.0001,innerRadius/cover);
+        sidePage.style.width=sidePage.style.height=(cover*2)+'px';
+        sidePage.style.left=(sideX-cover)+'px';
+        sidePage.style.top=(sideY-cover)+'px';
+        sidePage.style.transform=`scale(${revealScale})`;
         if(sideViewport){
-          sideViewport.style.left=(innerRadius-sideX)+'px';
-          sideViewport.style.top=(innerRadius-sideY)+'px';
+          sideViewport.style.left=sideViewport.style.top=cover+'px';
           sideViewport.style.width=width+'px';sideViewport.style.height=height+'px';
+          sideViewport.style.transform=`scale(${1/revealScale}) translate(${-sideX}px,${-sideY}px)`;
         }
         if(sideDisk){sideDisk.style.width=sideDisk.style.height=(cover*2)+'px';sideDisk.style.left=(sideX-cover)+'px';sideDisk.style.top=(sideY-cover)+'px';sideDisk.style.transform=`scale(${radius/cover})`;}
         if(sideDiskFill)sideDiskFill.style.transform=`scale(${radius>0?Math.max(0,1-1.5/radius):0})`;

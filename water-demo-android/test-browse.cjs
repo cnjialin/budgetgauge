@@ -29,6 +29,14 @@ const assert=require('node:assert/strict');
    });
    await page.waitForTimeout(150);
    assert.equal(await frame.locator('#historyMonthList').evaluate(()=>window.historyMutations),0,'History DOM must stay stable while the circle expands');
+   const fixedWidth=await page.locator('#sidePage').evaluate(el=>el.offsetWidth);
+   for(const fraction of [.4,.65,.45,.55]) {
+    await page.mouse.move(width*fraction,height*.55,{steps:4});await page.waitForTimeout(30);
+    const bounds=await page.locator('#sideFrame').boundingBox();
+    assert(Math.abs(bounds.x)<.1&&Math.abs(bounds.y)<.1,'Iframe stays at the screen origin during reversed half-swipes');
+    assert(Math.abs(bounds.width-width)<.1&&Math.abs(bounds.height-height)<.1,'Iframe stays unscaled');
+    assert.equal(await page.locator('#sidePage').evaluate(el=>el.offsetWidth),fixedWidth,'Clip window layout size must not change per frame');
+   }
    await page.mouse.up();
    await frame.locator('#historyModal').waitFor({state:'visible'});await page.waitForTimeout(650);
    assert(await frame.locator('#historyMonthList').evaluate(()=>window.historyMutations>0),'Deferred data must render after entry');

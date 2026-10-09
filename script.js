@@ -355,6 +355,7 @@ const LEGACY_EXPENSE_CATEGORIES = [
 ];
 const EXPENSE_CATEGORIES = [
   {id:'food',label:'餐饮',icon:'food',children:[
+    {id:'family-meal',label:'家庭',icon:'food'},
     {id:'canteen',label:'食堂',icon:'food'},
     {id:'restaurant',label:'餐馆',icon:'food'},
     {id:'street-food',label:'小吃',icon:'food'},
@@ -363,6 +364,7 @@ const EXPENSE_CATEGORIES = [
   ]},
   {id:'transport',label:'交通',icon:'transport',children:[
     {id:'public-transit',label:'公共交通',icon:'transport'},
+    {id:'electric-bike',label:'电动车',icon:'transport'},
     {id:'taxi',label:'打车',icon:'transport'},
     {id:'train',label:'火车',icon:'transport'},
     {id:'flight',label:'飞机',icon:'transport'},
@@ -2795,8 +2797,11 @@ function loadExpenseCategories() {
   try {
     const parsed = JSON.parse(stored);
     const normalized = normalizeExpenseCategoryTree(parsed);
-    // Upgrade the unchanged old default; retain user-customized category trees.
-    if (JSON.stringify(normalized) === JSON.stringify(normalizeExpenseCategoryTree(LEGACY_EXPENSE_CATEGORIES))) return fallback;
+    // Upgrade unchanged defaults; retain user-customized category trees.
+    const previousDefaults = EXPENSE_CATEGORIES.map(category => ({ ...category,
+      children: category.children?.filter(child => !['family-meal', 'electric-bike'].includes(child.id)) }));
+    if ([LEGACY_EXPENSE_CATEGORIES, previousDefaults].some(defaults =>
+      JSON.stringify(normalized) === JSON.stringify(normalizeExpenseCategoryTree(defaults)))) return fallback;
     return normalized.length ? normalized : fallback;
   } catch {
     return fallback;

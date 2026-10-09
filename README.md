@@ -11,12 +11,13 @@
 | --- | --- | --- |
 | Android 工程 | `water-demo-android/` | `android/`（Capacitor） |
 | applicationId | `com.codex.waterdemo` | `com.codex.budgetgauge` |
-| Android 版本 | `2.0.3`，versionCode `20003` | `0.3.1` |
+| Android 版本 | `2.0.4`，versionCode `20004` | `0.3.1` |
 | 主页面 | `public/water-demo.html` | `index.html` |
 | 安装包交付 | `outputs/water-demo.apk` | 原有发布流程 |
 
 新版虽然目录名仍带 `demo`，但已经是当前持续开发和交付的独立 App。
-新版首次以 `v2.0.0` 发布，当前根目录 `package.json` 与新版 APK 的版本统一为 `2.0.3`。
+新版首次以 `v2.0.0` 发布，当前根目录 `package.json` 与新版 APK 的版本统一为 `2.0.4`。
+2.0.4 默认分类新增餐饮首项“家庭”和公共交通后的“电动车”。本地仍是旧默认分类时自动使用新默认列表，手动定制过的分类保留。
 旧版 Android 工程仍保留 `0.3.1`，不要使用旧版版本同步脚本更新新版。
 设置页“检查更新”仅在点击时查询 GitHub 最新正式 Release，对比当前安装版本；下载资产固定为 `water-demo.apk`，避免下载旧版安装包。
 Android 更新检查通过原生网络线程请求 API，失败时读取 `public/water-release.json` 的备用版本信息；这个文件只在对应 Release 安装包发布后更新。浏览器链接直接调用系统 Intent，避免包可见性查询误判。月份切换保留同一个 ECharts 实例与分类路径对应的扇区，通过合并数据平滑改变扇区大小，不清空或重建旭日图，不做整体淡入或位移。

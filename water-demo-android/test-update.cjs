@@ -9,10 +9,12 @@ const assert=require('node:assert/strict');
   await page.addInitScript(()=>{window.opened=[];window.WaterSensors={isAvailable:()=>false,getAppVersion:()=> '2.0.0',openReleaseUrl:url=>{window.opened.push(url);return true;}}});
   await page.route('https://api.github.com/repos/cnjialin/budgetgauge/releases/latest',async route=>{
    calls++;
-   if(mode==='error')return route.fulfill({status:403,body:'rate limited'});
+   if(mode==='error'||mode==='fallback')return route.fulfill({status:403,body:'rate limited'});
    const tag=mode==='equal'?'v2.0.0':mode==='older'?'v0.3.1':mode==='numeric'?'v2.10.0':'v2.0.1';
    await route.fulfill({json:{tag_name:tag,assets:[{name:mode==='legacy'?'app-release.apk':'water-demo.apk',state:'uploaded',browser_download_url:`https://github.com/cnjialin/budgetgauge/releases/download/${tag}/water-demo.apk`}]}});
   });
+  await page.route('https://raw.githubusercontent.com/cnjialin/budgetgauge/main/public/water-release.json',route=>mode==='fallback'
+   ? route.fulfill({json:{tag_name:'v2.0.0',assets:[]}}) : route.fulfill({status:503,body:'unavailable'}));
   await page.goto('file:///E:/codex/outputs/water-demo.html');
   await page.waitForTimeout(800);assert.equal(calls,0,'No startup update request');
   await page.waitForTimeout(1600);
@@ -28,6 +30,15 @@ const assert=require('node:assert/strict');
   mode='numeric';await check();await page.waitForFunction(()=>document.querySelector('#updateStatus').textContent.includes('v2.10.0'));
   mode='legacy';await check();await page.waitForFunction(()=>document.querySelector('#updateStatus').textContent.includes('暂未就绪'));assert(await page.locator('#downloadUpdate').isHidden());
   mode='error';await check();await page.waitForFunction(()=>document.querySelector('#updateStatus').textContent.includes('检查失败'));assert.equal(await page.locator('#checkUpdate').isEnabled(),true);
+  mode='fallback';await check();await page.waitForFunction(()=>document.querySelector('#updateStatus').textContent==='当前已是最新版本');
+  const webCalls=calls;
+  await page.evaluate(()=>{window.WaterSensors.checkLatestRelease=requestId=>{
+   dispatchEvent(new CustomEvent('waterrelease',{detail:{requestId:'stale',error:'stale'}}));
+   setTimeout(()=>dispatchEvent(new CustomEvent('waterrelease',{detail:{requestId,release:{tag_name:'v2.0.1',assets:[{name:'water-demo.apk',state:'uploaded',browser_download_url:'https://github.com/cnjialin/budgetgauge/releases/download/v2.0.1/water-demo.apk'}]}}})),30);
+  };});
+  await check();await page.waitForFunction(()=>!document.querySelector('#downloadUpdate').hidden);assert.equal(calls,webCalls,'Android uses native networking');
+  await page.evaluate(()=>{window.WaterSensors.checkLatestRelease=requestId=>dispatchEvent(new CustomEvent('waterrelease',{detail:{requestId,error:'连接超时'}}));});
+  await check();await page.waitForFunction(()=>document.querySelector('#updateStatus').textContent.includes('连接超时'));
   await page.locator('#releasePageLink').click();assert.equal(await page.evaluate(()=>window.opened.at(-1)),'https://github.com/cnjialin/budgetgauge/releases');
   assert.deepEqual(errors,[]);
   console.log('Update checks passed: manual request, version comparison, confirmation, browser bridge, legacy asset rejection, retry.');

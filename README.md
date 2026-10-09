@@ -11,14 +11,15 @@
 | --- | --- | --- |
 | Android 工程 | `water-demo-android/` | `android/`（Capacitor） |
 | applicationId | `com.codex.waterdemo` | `com.codex.budgetgauge` |
-| Android 版本 | `2.0.0`，versionCode `20000` | `0.3.1` |
+| Android 版本 | `2.0.1`，versionCode `20001` | `0.3.1` |
 | 主页面 | `public/water-demo.html` | `index.html` |
 | 安装包交付 | `outputs/water-demo.apk` | 原有发布流程 |
 
 新版虽然目录名仍带 `demo`，但已经是当前持续开发和交付的独立 App。
-新版首次以 `v2.0.0` 发布，根目录 `package.json` 与新版 APK 的版本统一为 `2.0.0`。
+新版首次以 `v2.0.0` 发布，当前根目录 `package.json` 与新版 APK 的版本统一为 `2.0.1`。
 旧版 Android 工程仍保留 `0.3.1`，不要使用旧版版本同步脚本更新新版。
 设置页“检查更新”仅在点击时查询 GitHub 最新正式 Release，对比当前安装版本；下载资产固定为 `water-demo.apk`，避免下载旧版安装包。
+Android 更新检查通过原生网络线程请求 API，失败时读取 `public/water-release.json` 的备用版本信息；这个文件只在对应 Release 安装包发布后更新。浏览器链接直接调用系统 Intent，避免包可见性查询误判。月份切换仅改变透明度，旭日图中心固定。
 后续发布需提升新版 `versionCode` 并保持当前水滴记的包名及签名，才能覆盖安装。当前发布沿用已有测试包签名。
 
 ## 项目目录

@@ -8,6 +8,40 @@ const bridge = window.WaterSensors;
 const current = bridge?.getAppVersion?.() || version;
 document.querySelector('#appVersionLabel').textContent = `当前版本 ${current}`;
 let downloadUrl = '';
+let requestSequence = 0;
+
+function readLatestRelease() {
+  if (bridge?.checkLatestRelease) {
+    return new Promise((resolve, reject) => {
+      const requestId = String(++requestSequence);
+      const cleanup = () => { clearTimeout(timer); window.removeEventListener('waterrelease', receive); };
+      const receive = event => {
+        if (event.detail?.requestId !== requestId) return;
+        cleanup();
+        if (event.detail.error) reject(new Error(event.detail.error));
+        else resolve(event.detail.release);
+      };
+      const timer = setTimeout(() => { cleanup(); reject(new Error('连接超时')); }, 40000);
+      window.addEventListener('waterrelease', receive);
+      try { bridge.checkLatestRelease(requestId); } catch { cleanup(); reject(new Error('无法启动更新检查')); }
+    });
+  }
+  return readWebRelease();
+}
+async function readWebRelease() {
+  let lastError;
+  for (const url of ['https://api.github.com/repos/cnjialin/budgetgauge/releases/latest',
+    'https://raw.githubusercontent.com/cnjialin/budgetgauge/main/public/water-release.json']) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+      if (!response.ok) throw new Error(`服务器响应 ${response.status}`);
+      return await response.json();
+    } catch (error) { lastError = error; } finally { clearTimeout(timer); }
+  }
+  throw new Error(lastError?.name === 'AbortError' ? '连接超时' : '无法连接 GitHub');
+}
 
 function parseVersion(value) {
   const match = /^v?(\d+)\.(\d+)(?:\.(\d+))?$/.exec(value);
@@ -37,14 +71,8 @@ check.addEventListener('click', async () => {
   download.hidden = true;
   downloadUrl = '';
   status.textContent = '正在检查…';
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
   try {
-    const response = await fetch('https://api.github.com/repos/cnjialin/budgetgauge/releases/latest', {
-      headers: { Accept: 'application/vnd.github+json' }, signal: controller.signal, cache: 'no-store',
-    });
-    if (!response.ok) throw new Error('release unavailable');
-    const release = await response.json();
+    const release = await readLatestRelease();
     const remote = parseVersion(release.tag_name);
     const installed = parseVersion(current);
     if (!remote || !installed || release.draft || release.prerelease) throw new Error('invalid release');
@@ -61,10 +89,9 @@ check.addEventListener('click', async () => {
     downloadUrl = asset.browser_download_url;
     status.textContent = `发现新版本 ${release.tag_name}，是否下载更新？`;
     download.hidden = false;
-  } catch {
-    status.textContent = '检查失败，请检查网络后重试，也可打开 GitHub';
+  } catch (error) {
+    status.textContent = `检查失败：${error.message || '网络不可用'}，可重试或打开 GitHub`;
   } finally {
-    clearTimeout(timer);
     check.disabled = false;
   }
 });

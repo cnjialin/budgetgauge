@@ -1,0 +1,10 @@
+{
+  "tag_name": "v2.0.0",
+  "draft": false,
+  "prerelease": false,
+  "assets": [{
+    "name": "water-demo.apk",
+    "state": "uploaded",
+    "browser_download_url": "https://github.com/cnjialin/budgetgauge/releases/download/v2.0.0/water-demo.apk"
+  }]
+}

@@ -3805,8 +3805,8 @@ function changeStatsMonth(offset) {
   renderExpenseStats();
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
     expenseSunburstChart.animate([
-      { opacity: 0.25, transform: `translateY(${offset < 0 ? 16 : -16}px)` },
-      { opacity: 1, transform: 'translateY(0)' },
+      { opacity: 0.25 },
+      { opacity: 1 },
     ], { duration: 240, easing: 'ease-out' });
   }
 }

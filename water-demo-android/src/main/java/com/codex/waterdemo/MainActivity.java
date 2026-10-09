@@ -23,6 +23,9 @@ import android.window.OnBackInvokedDispatcher;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import org.json.JSONObject;
 
 public final class MainActivity extends Activity implements SensorEventListener {
     private WebView web;
@@ -131,7 +134,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
                     || uri.getPath() == null || !(uri.getPath().equals("/cnjialin/budgetgauge/releases")
                     || uri.getPath().startsWith("/cnjialin/budgetgauge/releases/"))) return false;
             Intent intent = new Intent(Intent.ACTION_VIEW, uri);
-            if (intent.resolveActivity(getPackageManager()) == null) return false;
+            intent.addCategory(Intent.CATEGORY_BROWSABLE);
             runOnUiThread(() -> {
                 try { startActivity(intent); }
                 catch (ActivityNotFoundException exception) {
@@ -140,6 +143,36 @@ public final class MainActivity extends Activity implements SensorEventListener 
             });
             return true;
         }
+        @JavascriptInterface public void checkLatestRelease(String requestId) {
+            if (requestId == null || !requestId.matches("[0-9]+")) return;
+            new Thread(() -> {
+                JSONObject result = new JSONObject();
+                try {
+                    result.put("requestId", requestId);
+                    String[] urls = {
+                        "https://api.github.com/repos/cnjialin/budgetgauge/releases/latest",
+                        "https://raw.githubusercontent.com/cnjialin/budgetgauge/main/public/water-release.json"
+                    };
+                    Exception lastError = null;
+                    for (String url : urls) {
+                        try { result.put("release", new JSONObject(readRelease(url))); break; }
+                        catch (Exception exception) { lastError = exception; }
+                    }
+                    if (!result.has("release")) {
+                        String reason = lastError instanceof java.net.SocketTimeoutException ? "连接超时"
+                            : lastError instanceof java.net.UnknownHostException ? "无法解析 GitHub 地址"
+                            : lastError instanceof javax.net.ssl.SSLException ? "安全连接失败"
+                            : lastError == null ? "网络不可用" : lastError.getMessage();
+                        result.put("error", reason);
+                    }
+                } catch (Exception ignored) { return; }
+                String payload = JSONObject.quote(result.toString());
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed()) web.evaluateJavascript(
+                        "window.dispatchEvent(new CustomEvent('waterrelease',{detail:JSON.parse(" + payload + ")}));", null);
+                });
+            }, "water-release-check").start();
+        }
         @JavascriptInterface public boolean isAvailable() { return gravitySensor != null; }
         @JavascriptInterface public void setEnabled(boolean value) {
             runOnUiThread(() -> {
@@ -147,6 +180,28 @@ public final class MainActivity extends Activity implements SensorEventListener 
                 updateSensors();
             });
         }
+    }
+
+    private String readRelease(String url) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+        connection.setConnectTimeout(8000);
+        connection.setReadTimeout(8000);
+        connection.setRequestProperty("User-Agent", "Water-Android");
+        connection.setRequestProperty("Accept", "application/json");
+        try {
+            int code = connection.getResponseCode();
+            if (code != 200) throw new java.io.IOException(code == 403 || code == 429
+                ? "GitHub 请求受限" : "服务器响应 " + code);
+            try (InputStream input = connection.getInputStream(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, count);
+                    if (output.size() > 1048576) throw new java.io.IOException("版本数据过大");
+                }
+                return new String(output.toByteArray(), StandardCharsets.UTF_8);
+            }
+        } finally { connection.disconnect(); }
     }
 
     @Override public void onBackPressed() { returnToHome(); }

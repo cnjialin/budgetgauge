@@ -57,6 +57,13 @@ const assert = require('node:assert/strict');
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 195, y: 650 }] });
     for (let step = 1; step <= 8; step++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 195, y: 650 - step * 14 }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await expectMonth(-1);
+    for (let frame = 0; frame < 18; frame++) {
+      const bounds = await side.locator('#expenseSunburstChart').boundingBox();
+      assert(Math.abs(bounds.y + bounds.height / 2 - 422) < 2, 'Month transitions must keep the chart center fixed');
+      const transforms = await side.locator('#expenseSunburstChart').evaluate(el => el.getAnimations().flatMap(animation => animation.effect.getKeyframes().map(key => key.transform).filter(Boolean)));
+      assert.equal(transforms.length, 0, 'Month transitions must never translate the chart');
+      await page.waitForTimeout(16);
+    }
     await key('ArrowUp'); await expectMonth(-2); assert(await side.locator('#statsEmptyState').isVisible());
     await key('ArrowUp'); await expectMonth(-3); await key('ArrowUp'); await expectMonth(-3); await page.waitForTimeout(1000);
     assert.equal(allReads, readsAfterStartup, 'Viewing and swiping never trigger cloud reads');

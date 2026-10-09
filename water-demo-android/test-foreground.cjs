@@ -1,0 +1,12 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const html=fs.readFileSync('public/water-demo.html','utf8'),events={};
+const env={document:{hidden:false,addEventListener:(name,fn)=>events[name]=fn},addEventListener:(name,fn)=>events[name]=fn,reducedMotion:{matches:false},entry:{state:'water'},sideProgress:0,settingsProgress:0,loginProgress:0,N:121,velocity:new Float64Array(121),starCurrent:0,monthlySpent:128.5,monthAmountMotion:null,monthAmountTarget:128.5,paintMonthAmount(value){env.painted=value;},beginMonthAmountMotion(){env.amountStarts=(env.amountStarts||0)+1;}};
+vm.createContext(env);vm.runInContext(html.slice(html.indexOf('  let wakeWaterArmed='),html.indexOf("  addEventListener('resize', resize);")),env);
+events.waterforeground({detail:{active:true}});assert(env.velocity.every(v=>v===0),'Initial launch does not trigger resume');
+events.waterforeground({detail:{active:false}});events.waterforeground({detail:{active:true}});
+assert.equal(env.painted,0);assert.equal(env.monthAmountTarget,128.5);assert.equal(env.monthlySpent,128.5);assert.equal(env.amountStarts,1);
+assert.equal(env.velocity[0],14);assert.equal(env.velocity[120],-14);assert(Math.abs(env.velocity.reduce((a,b)=>a+b,0))<1e-8);
+events.visibilitychange();assert.equal(env.amountStarts,1);assert.equal(env.velocity[0],14,'Native and visibility resume must not double the impulse');
+env.reducedMotion.matches=true;events.waterforeground({detail:{active:false}});events.waterforeground({detail:{active:true}});assert.equal(env.velocity[0],14);
+env.reducedMotion.matches=false;env.entry.state='black';events.waterforeground({detail:{active:false}});events.waterforeground({detail:{active:true}});assert.equal(env.velocity[0],14);
+console.log('PASS: resume only, single gentle zero-mean impulse, reduced motion and open editor respected');

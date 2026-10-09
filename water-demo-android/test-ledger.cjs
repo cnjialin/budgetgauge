@@ -37,10 +37,10 @@ const assert=require('node:assert/strict');
      return route.fulfill({status:201,headers,json:saved});
     }
     if(url.searchParams.has('id'))return route.fulfill({status:200,headers,json:rows.filter(r=>String(r.id)===url.searchParams.get('id').slice(3))});
-    reads++;
+    if(url.searchParams.has('time'))reads++;
     if(readGate)await readGate;
     assert.equal(url.searchParams.get('user_id'),'eq.'+user.id);assert.equal(url.searchParams.get('type'),'eq.expense');
-    assert(url.searchParams.getAll('time').some(x=>x.startsWith('gte.')));assert(url.searchParams.getAll('time').some(x=>x.startsWith('lt.')));
+    if(url.searchParams.has('time')){assert(url.searchParams.getAll('time').some(x=>x.startsWith('gte.')));assert(url.searchParams.getAll('time').some(x=>x.startsWith('lt.')));}
     if(failRead)return route.fulfill({status:403,headers,json:{message:'test read denied',code:'42501'}});
     const offset=Number(url.searchParams.get('offset')||0),limit=Number(url.searchParams.get('limit'));
     return route.fulfill({status:200,headers,json:rows.slice(offset,offset+limit)});

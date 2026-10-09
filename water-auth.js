@@ -1,4 +1,5 @@
 import { createClient, processLock } from '@supabase/supabase-js';
+import { fetchAllExpenseRecords } from './monthly-stats.js';
 
 // Share the authenticated client with the water UI's ledger adapter.
 let client, config, subscription;
@@ -39,7 +40,7 @@ function identity(user) {
 let ledgerWriting = false;
 async function runWaterLedger(action, value, notify) {
   const mutation=['ledger-update','ledger-delete'].includes(action);
-  const result = mutation?'ledger-mutated':action === 'ledger-save' ? 'ledger-saved' : 'ledger-data';
+  const result = action === 'ledger-stats' ? 'ledger-stats-data' : mutation?'ledger-mutated':action === 'ledger-save' ? 'ledger-saved' : 'ledger-data';
   const owner = value?.owner;
   const operationId = value?.operationId;
   if (action === 'ledger-save' && ledgerWriting) {notify(result,{owner,operationId,error:'同步繁忙，稍后重试'});return;}
@@ -53,7 +54,10 @@ async function runWaterLedger(action, value, notify) {
     if (authError) throw authError;
     const auth={user:sessionData.session?.user};
     if (!auth.user || owner !== identity(auth.user).owner || active !== client) throw Error('登录状态已变化，请重试');
-    if(mutation) {
+    if (action === 'ledger-stats') {
+      const records = await fetchAllExpenseRecords(active, auth.user.id);
+      notify(result, { owner, requestId: value.requestId, records });
+    } else if(mutation) {
       const record=value.record;
       if(!record?.id)throw Error('记录编号无效');
       let query;
@@ -98,7 +102,7 @@ async function runWaterLedger(action, value, notify) {
       notify(result,{owner,records});
     }
   } catch(error) {
-    notify(result,{owner,operationId,error:error.message||'连接失败，请重试'});
+    notify(result,{owner,operationId,requestId:value?.requestId,error:error.message||'连接失败，请重试'});
   } finally {if(action==='ledger-save')ledgerWriting=false;}
 }
 function checkedConfig(value) {

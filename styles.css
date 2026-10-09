@@ -1887,6 +1887,28 @@ body.keyboard-open .settings-modal.is-page-view {
   text-align: center;
 }
 
+.stats-month-label {
+  margin: 12px 0 0;
+  color: #8e8e93;
+  font: 400 14px/1.4 system-ui, sans-serif;
+}
+
+.stats-month-status {
+  position: fixed;
+  left: 22px;
+  right: 22px;
+  bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+  margin: 0;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  color: #999;
+  font: 400 12px/1.5 system-ui, sans-serif;
+  text-align: center;
+}
+
+#statsModal { touch-action: none; }
+
 .stats-chart-shell {
   --stats-chart-size: min(
     calc(100vw - 44px),

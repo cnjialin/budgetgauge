@@ -17,6 +17,9 @@ body.water-page-view { --page-heading-size:26px; --page-heading-top:max(76px,cal
 .water-page-view #historyModal .history-list::-webkit-scrollbar { display:none; width:0; height:0; }
 .water-page-view #historyModal .history-bar-value { background:var(--water-ink,#000); box-shadow:none; }
 .water-page-view #statsModal .stats-card { grid-template-rows:auto minmax(0,1fr); }
+.water-page-view #statsModal { touch-action:none; }
+.water-page-view #statsModal .stats-card { grid-template-rows:auto auto minmax(0,1fr); }
+.water-page-view .stats-month-status { bottom:calc(26px + env(safe-area-inset-bottom,0px)); }
 .water-page-view #historyModal .history-item { box-shadow:none; border-color:#ddd; }
 .water-page-view #historyModal .history-tab { color:#666; }
 .water-page-view #historyModal .history-tab.active { color:#fff; }

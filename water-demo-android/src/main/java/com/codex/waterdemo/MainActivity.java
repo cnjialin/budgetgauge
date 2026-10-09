@@ -1,6 +1,9 @@
 package com.codex.waterdemo;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.content.ActivityNotFoundException;
+import android.net.Uri;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.hardware.Sensor;
@@ -117,6 +120,26 @@ public final class MainActivity extends Activity implements SensorEventListener 
     }
 
     public final class SensorBridge {
+        @JavascriptInterface public String getAppVersion() {
+            try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+            catch (Exception exception) { return "2.0.0"; }
+        }
+        @JavascriptInterface public boolean openReleaseUrl(String url) {
+            Uri uri = Uri.parse(url);
+            if (!"https".equals(uri.getScheme()) || !"github.com".equals(uri.getHost())
+                    || uri.getUserInfo() != null || (uri.getPort() != -1 && uri.getPort() != 443)
+                    || uri.getPath() == null || !(uri.getPath().equals("/cnjialin/budgetgauge/releases")
+                    || uri.getPath().startsWith("/cnjialin/budgetgauge/releases/"))) return false;
+            Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+            if (intent.resolveActivity(getPackageManager()) == null) return false;
+            runOnUiThread(() -> {
+                try { startActivity(intent); }
+                catch (ActivityNotFoundException exception) {
+                    android.widget.Toast.makeText(MainActivity.this, "请安装浏览器后重试", android.widget.Toast.LENGTH_SHORT).show();
+                }
+            });
+            return true;
+        }
         @JavascriptInterface public boolean isAvailable() { return gravitySensor != null; }
         @JavascriptInterface public void setEnabled(boolean value) {
             runOnUiThread(() -> {
@@ -175,11 +198,13 @@ public final class MainActivity extends Activity implements SensorEventListener 
         super.onResume();
         resumed = true;
         web.onResume();
+        web.evaluateJavascript("window.dispatchEvent(new CustomEvent('waterforeground',{detail:{active:true}}));", null);
         updateSensors();
     }
     @Override protected void onPause() {
         resumed = false;
         sensors.unregisterListener(this);
+        web.evaluateJavascript("window.dispatchEvent(new CustomEvent('waterforeground',{detail:{active:false}}));", null);
         web.onPause();
         super.onPause();
     }

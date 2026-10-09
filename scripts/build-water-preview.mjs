@@ -18,7 +18,13 @@ let editor = markup.replace(/<link\b[^>]*>/g, '')
   .replace('<script type="module" src="script.js"></script>', () => `<script>${js}</script>`);
 const source = await fs.readFile('public/water-demo.html', 'utf8');
 const payload = JSON.stringify(editor).replace(/</g, '\\u003c');
-const output = source.replace(/(<script id="recordBundle" type="application\/json">)[\s\S]*?(<\/script>)/, (_, a, b) => a + payload + b);
+const update = await build({ entryPoints: ['water-update.js'], bundle: true, write: false,
+  format: 'iife', minify: true, target: ['chrome100'] });
+const updateScript = `<script id="updateBundle">${update.outputFiles[0].text.replace(/<\/script/gi, '<\\/script')}</script>`;
+let output = source.replace(/(<script id="recordBundle" type="application\/json">)[\s\S]*?(<\/script>)/, (_, a, b) => a + payload + b);
+output = output.includes('<script id="updateBundle">')
+  ? output.replace(/<script id="updateBundle">[\s\S]*?<\/script>/, () => updateScript)
+  : output.replace('</body>', () => updateScript + '\n</body>');
 if (output === source && !source.includes('recordBundle')) throw new Error('Missing record bundle marker');
 await fs.writeFile('public/water-demo.html', output);
 await fs.mkdir('outputs', { recursive: true });

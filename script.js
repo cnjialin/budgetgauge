@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 import { waterAuth, waterLedger } from "./water-auth.js";
+import { monthKey, shiftMonth, summarizeExpenseMonth, summarizeExpenseMonths, fetchAllExpenseRecords, MonthStatsCache } from "./monthly-stats.js";
 import { SunburstChart } from "echarts/charts";
 import { GraphicComponent, TooltipComponent } from "echarts/components";
 import { init, use } from "echarts/core";
@@ -15,6 +16,7 @@ const isWaterRecordView = window.name === "water-record-preview" || isWaterPageV
 let waterBrowsePage='history',waterEdgeGesture=null,waterStatsWaiting=false;
 let waterBrowseOpening=false,waterPendingBrowseData=null;
 function applyWaterBrowseData(record) {
+  updateStatsAccount(record);
   expenseHistory=(record.records||[]).map(r=>({...r,amount:Number(r.amount)}));
   monthlyBudgetLimit=record.quota;
   rebuildMonthHistorySummaryForCurrentData();
@@ -112,6 +114,8 @@ const statsBackdrop = document.querySelector("#statsBackdrop");
 const statsCard = document.querySelector(".stats-card");
 const expenseSunburstChart = document.querySelector("#expenseSunburstChart");
 const statsEmptyState = document.querySelector("#statsEmptyState");
+const statsMonthLabel = document.querySelector("#statsMonthLabel");
+const statsMonthStatus = document.querySelector("#statsMonthStatus");
 const deleteConfirmModal = document.querySelector("#deleteConfirmModal");
 const deleteConfirmBackdrop = document.querySelector("#deleteConfirmBackdrop");
 const deleteConfirmKicker = document.querySelector("#deleteConfirmKicker");
@@ -187,6 +191,9 @@ let isQuickExpenseMode = false;
 let editingExpenseRecord = null;
 let pageTransitionTimer = 0;
 let expenseStatsChart = null;
+let statsMonth = monthKey(), statsOwner = '', statsPending = [], statsFirstMonth = '';
+let statsCache = new MonthStatsCache(''), statsSyncRequest = null, statsInitialAttempted = false;
+let statsGesture = null, statsSwipeTime = 0;
 let expenseStatsResizeFrame = 0;
 let expenseStatsCenterFrame = 0;
 let expenseStatsCurrentTotal = 0;
@@ -452,6 +459,7 @@ async function initialize() {
   closeHistoryBtn.addEventListener("click", closeHistoryModal);
   historyBackdrop.addEventListener("click", closeHistoryModal);
   statsBackdrop.addEventListener("click", closeStatsModal);
+  bindStatsMonthNavigation();
   deleteConfirmBackdrop.addEventListener("click", closeDeleteConfirmModal);
   cancelDeleteExpenseBtn.addEventListener("click", closeDeleteConfirmModal);
   confirmDeleteExpenseBtn.addEventListener("click", confirmPendingDelete);
@@ -564,6 +572,14 @@ async function initialize() {
         else applyWaterBrowseData(event.data.record);
         return;
       }
+      if(isWaterPageView && event.data.action==='stats-sync-data') {
+        receiveStatsSync(event.data.record);
+        return;
+      }
+      if(isWaterPageView && event.data.action==='stats-refresh') {
+        requestStatsSync(true);
+        return;
+      }
       if(isWaterPageView && event.data.action==='browse-open') {
         if(waterPendingBrowseData){applyWaterBrowseData(waterPendingBrowseData);waterPendingBrowseData=null;}
         waterBrowseOpening=true;
@@ -588,6 +604,8 @@ async function initialize() {
         confirmExpenseBtn.disabled=false;cancelExpenseBtn.disabled=false;
         if(event.data.record.error){expenseStatus.textContent=event.data.record.error;document.querySelector('#browseStatus').textContent=event.data.record.error;return;}
         document.querySelector('#browseStatus').textContent='';
+        expandedMonthDateKey='';
+        historyDetailTransitioning=false;
         closeExpenseModal({waterInternal:true,render:false,focus:false});openHistoryModal();return;
       }
       if(isWaterPageView && event.data.action==='browse-back') {
@@ -595,7 +613,7 @@ async function initialize() {
         if(isExpenseMode){closeExpenseModal({waterInternal:true,render:false,focus:false});openHistoryModal();return;}
         notifyWaterEditor('page-close');return;
       }
-      if(['ledger-load','ledger-save','ledger-update','ledger-delete'].includes(event.data.action)) {
+      if(['ledger-load','ledger-save','ledger-update','ledger-delete','ledger-stats'].includes(event.data.action)) {
         waterLedger(event.data.action,event.data.record,notifyWaterEditor);return;
       }
       if(['auth-init','auth-login','auth-logout','auth-reconnect'].includes(event.data.action)) {
@@ -1281,6 +1299,9 @@ function closeHistoryModal() {
 }
 
 function openStatsModal({deferAnimation=false}={}) {
+  statsMonth = monthKey();
+  if (!isWaterRecordView) updateStatsAccount({ owner: currentSession?.user?.id ? `${supabaseUrl}|${currentSession.user.id}` : '', records: expenseHistory });
+  delete statsMonthStatus.dataset.error;
   closeQuickExpenseEntry({ render: false, focus: false });
   resetExpenseStatsChart();
   hidePageView(settingsModal);
@@ -1290,6 +1311,7 @@ function openStatsModal({deferAnimation=false}={}) {
   statsCard.setAttribute("role", "region");
   statsCard.removeAttribute("aria-modal");
   setActiveMainView("stats");
+  updateStatsMonthCaption();
   if(deferAnimation){
     const {total}=buildExpenseSunburstData();
     statsEmptyState.hidden=total>0;expenseSunburstChart.hidden=total<=0;
@@ -3470,6 +3492,7 @@ function setGaugeValueProgress(pathLength, ratio) {
 }
 
 function refreshStatsIfVisible() {
+  if (!isWaterRecordView) updateStatsAccount({ owner: currentSession?.user?.id ? `${supabaseUrl}|${currentSession.user.id}` : '', records: expenseHistory });
   if(isWaterPageView&&waterStatsWaiting)return;
   if (!statsModal?.hidden) {
     renderExpenseStats();
@@ -3484,12 +3507,16 @@ function renderExpenseStats(options = {}) {
   }
 
   const { data, total } = buildExpenseSunburstData();
+  updateStatsMonthCaption();
   const coloredData = applyStatsColorsToSunburstData(data);
   expenseStatsCurrentTotal = total;
   statsEmptyState.hidden = total > 0;
   expenseSunburstChart.hidden = total <= 0;
 
   if (total <= 0) {
+    statsEmptyState.textContent = statsOwner && statsMonth !== monthKey() && !statsCache.get(statsMonth)
+      ? statsSyncRequest ? "正在后台缓存历史统计…" : "统计尚未缓存，请在登录页刷新消费记录。"
+      : "这个月没有消费记录。";
     expenseStatsChart?.clear();
     return;
   }
@@ -3696,61 +3723,134 @@ function scheduleExpenseStatsCenterUpdate() {
   });
 }
 
-function buildExpenseSunburstData() {
-  const rootChildren = [];
-  const rootIndex = new Map();
-  let total = 0;
-
-  expenseHistory
-    .filter((item) => isInCurrentLocalMonth(item.time))
-    .forEach((item) => {
-      const amount = Number(item.amount || 0);
-      if (amount <= 0) {
-        return;
-      }
-
-      const path = getRecordPurposeList(item).slice(0, 3);
-      if (!path.length) {
-        path.push("未分类");
-      }
-
-      total += amount;
-      let siblings = rootChildren;
-      let indexes = rootIndex;
-
-      path.forEach((rawName) => {
-        const name = String(rawName || "").trim() || "未分类";
-        let node = indexes.get(name);
-        if (!node) {
-          node = { name, value: 0, children: [], _index: new Map() };
-          indexes.set(name, node);
-          siblings.push(node);
-        }
-
-        node.value += amount;
-        siblings = node.children;
-        indexes = node._index;
-      });
-    });
-
-  return {
-    total,
-    data: rootChildren.map(cleanExpenseStatsNode),
-  };
+function updateStatsAccount(record) {
+  const owner = record.owner || '';
+  if (owner !== statsOwner) {
+    if (statsSyncRequest) clearTimeout(statsSyncRequest.timer);
+    statsSyncRequest = null;
+    statsInitialAttempted = false;
+    statsOwner = owner;
+    statsCache = new MonthStatsCache(owner);
+    statsMonth = monthKey();
+    statsFirstMonth = Object.keys(statsCache.entries).sort()[0] || '';
+    delete statsMonthStatus.dataset.error;
+  }
+  statsPending = record.pending || [];
+  if (!owner) {
+    statsFirstMonth = (record.records || []).map(row => monthKey(row.time)).filter(Boolean).sort()[0] || monthKey();
+  } else if (!statsCache.complete && !statsInitialAttempted) {
+    requestStatsSync();
+  }
 }
 
-function cleanExpenseStatsNode(node) {
-  const children = node.children.map(cleanExpenseStatsNode);
-  const cleanNode = {
-    name: node.name,
-    value: Math.round(Number(node.value || 0) * 100) / 100,
-  };
+function updateStatsMonthCaption(message) {
+  const [year, month] = statsMonth.split('-');
+  statsMonthLabel.textContent = year + '年' + Number(month) + '月';
+  expenseSunburstChart.setAttribute('aria-label', year + '年' + Number(month) + '月消费分类旭日图');
+  if (message !== undefined) statsMonthStatus.textContent = message;
+  else if (!statsSyncRequest && !statsMonthStatus.dataset.error) statsMonthStatus.textContent = '';
+}
 
-  if (children.length) {
-    cleanNode.children = children;
+function buildExpenseSunburstData() {
+  if (!statsOwner || statsMonth === monthKey()) {
+    const summary = summarizeExpenseMonth(expenseHistory, statsMonth);
+    statsCache.put(statsMonth, summary);
+    return summary;
   }
+  // Viewing a month is strictly local. Only app initialization or the login
+  // page's explicit refresh can start a cloud classification refresh.
+  return statsCache.get(statsMonth)?.summary || { data: [], total: 0 };
+}
 
-  return cleanNode;
+function requestStatsSync(force = false) {
+  if (!statsOwner || statsSyncRequest || (!force && (statsCache.complete || statsInitialAttempted))) return;
+  statsInitialAttempted = true;
+  delete statsMonthStatus.dataset.error;
+  const request = { requestId: crypto.randomUUID(), owner: statsOwner };
+  request.timer = setTimeout(() => receiveStatsSync({ owner: request.owner, requestId: request.requestId, error: '连接超时，请在登录页刷新消费记录' }), 120000);
+  statsSyncRequest = request;
+  const value = { requestId: request.requestId };
+  if (isWaterPageView) notifyWaterEditor('stats-sync-request', value);
+  else fetchAllExpenseRecords(supabase, currentSession.user.id)
+    .then(records => receiveStatsSync({ owner: request.owner, requestId: request.requestId, records }))
+    .catch(error => receiveStatsSync({ owner: request.owner, requestId: request.requestId, error: error.message }));
+}
+
+function receiveStatsSync(record) {
+  if (record.owner !== statsOwner || record.requestId !== statsSyncRequest?.requestId) return;
+  clearTimeout(statsSyncRequest.timer);
+  statsSyncRequest = null;
+  if (record.error || !Array.isArray(record.records)) {
+    statsMonthStatus.dataset.error = 'sync';
+    if (!statsCache.get(statsMonth)) statsEmptyState.textContent = '统计尚未缓存，请在登录页刷新消费记录。';
+    return;
+  }
+  // Apply the latest durable outbox, including edits made while the background
+  // fetch was running. Raw historical records are discarded after aggregation.
+  const summaries = summarizeExpenseMonths(record.records, statsPending);
+  statsCache.replace(summaries);
+  statsFirstMonth = summaries[0]?.month || monthKey();
+  if (statsMonth < statsFirstMonth) statsMonth = statsFirstMonth;
+  delete statsMonthStatus.dataset.error;
+  if (!statsModal.hidden && !waterStatsWaiting) renderExpenseStats();
+}
+
+function changeStatsMonth(offset) {
+  if (statsModal.hidden || waterStatsWaiting || waterBrowseOpening) return;
+  const next = shiftMonth(statsMonth, offset);
+  if (next > monthKey()) { updateStatsMonthCaption('已经是本月'); return; }
+  if (statsFirstMonth && next < statsFirstMonth) { updateStatsMonthCaption('已经是最早的消费月份'); return; }
+  statsMonth = next;
+  delete statsMonthStatus.dataset.error;
+  renderExpenseStats();
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    expenseSunburstChart.animate([
+      { opacity: 0.25, transform: `translateY(${offset < 0 ? 16 : -16}px)` },
+      { opacity: 1, transform: 'translateY(0)' },
+    ], { duration: 240, easing: 'ease-out' });
+  }
+}
+
+function bindStatsMonthNavigation() {
+  const start = (point, target) => {
+    if (statsModal.hidden || waterStatsWaiting || target.closest('button')) return;
+    statsGesture = { x: point.clientX, y: point.clientY };
+  };
+  const end = point => {
+    const gesture = statsGesture; statsGesture = null;
+    if (!gesture) return;
+    const dx = point.clientX - gesture.x, dy = point.clientY - gesture.y;
+    if (Math.abs(dy) >= 45 && Math.abs(dy) > Math.abs(dx) * 1.3) {
+      statsSwipeTime = performance.now();
+      changeStatsMonth(dy < 0 ? -1 : 1);
+    }
+  };
+  statsModal.addEventListener('touchstart', event => {
+    if (event.touches.length === 1) start(event.touches[0], event.target); else statsGesture = null;
+  }, { passive: true });
+  statsModal.addEventListener('touchend', event => { if (event.changedTouches[0]) end(event.changedTouches[0]); });
+  statsModal.addEventListener('touchcancel', () => { statsGesture = null; });
+  statsModal.addEventListener('pointerdown', event => {
+    if (event.pointerType !== 'touch') start(event, event.target);
+  });
+  statsModal.addEventListener('pointerup', event => { if (event.pointerType !== 'touch') end(event); });
+  statsModal.addEventListener('pointercancel', () => { statsGesture = null; });
+  statsModal.addEventListener('click', event => {
+    if (performance.now() - statsSwipeTime < 450) { event.preventDefault(); event.stopImmediatePropagation(); }
+  }, true);
+  statsModal.addEventListener('wheel', event => {
+    if (Math.abs(event.deltaY) < 20 || Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+    event.preventDefault();
+    if (performance.now() - statsSwipeTime < 450) return;
+    statsSwipeTime = performance.now();
+    changeStatsMonth(event.deltaY > 0 ? -1 : 1);
+  }, { passive: false });
+  document.addEventListener('keydown', event => {
+    if (statsModal.hidden || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    event.preventDefault();
+    changeStatsMonth(event.key === 'ArrowUp' ? -1 : 1);
+  });
+
 }
 
 function applyStatsColorsToSunburstData(data) {
@@ -4021,6 +4121,12 @@ function rebuildMonthHistorySummaryForCurrentData() {
     .map((item) => `${item.time || ""}|${Number(item.amount || 0)}`)
     .join("~");
   monthHistorySummaryCache = getMonthHistorySummary(monthItems);
+  // An edit/delete can remove the expanded day; otherwise every remaining
+  // row is rendered as a hidden sibling of a day that no longer exists.
+  if (expandedMonthDateKey && !monthHistorySummaryCache.some(item => item.dateKey === expandedMonthDateKey)) {
+    expandedMonthDateKey = "";
+  }
+  monthOverviewMarkupCache = "";
 }
 
 function renderMonthSummaryRows(summary) {

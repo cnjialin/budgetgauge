@@ -55,6 +55,19 @@ const assert=require('node:assert/strict');
    await page.waitForTimeout(100);
    const values=await page.evaluate(()=>JSON.parse(localStorage.getItem('water-demo-records')).map(r=>r.amount));
    assert.notDeepEqual(values,[28.5,70]);
+   assert.equal(await frame.locator('#historyMonthList .is-collapsed-sibling').count(),0,'Saving returns to visible overview');
+   await frame.locator('#historyMonthList .history-item-month').first().click();
+   await frame.locator('#historyMonthList .is-expanded').waitFor({state:'visible'});
+   // Move all records away from the expanded day, as when editing the last
+   // expense on that day. The remaining days must stay visible immediately.
+   await page.evaluate(()=>{
+    const rows=JSON.parse(localStorage.getItem('water-demo-records'));
+    const now=new Date();now.setDate(now.getDate()===1?2:1);
+    rows.forEach(row=>row.time=now.toISOString());
+    localStorage.setItem('water-demo-records',JSON.stringify(rows));dispatchEvent(new Event('focus'));
+   });
+   await frame.locator('#historyMonthList .history-item-month:not(.is-collapsed-sibling)').first().waitFor({state:'visible'});
+   assert.equal(await frame.locator('#historyMonthList .is-collapsed-sibling').count(),0,'Removing expanded date must return to visible overview');
    await touchSwipe(width*.7,height*.8,-44,12);await page.waitForTimeout(650);
    assert.equal(await page.locator('#sidePage').getAttribute('aria-hidden'),'true','History must return with left swipe away from edges');
    await page.mouse.move(width*.8,height*.55);await page.mouse.down();await page.mouse.move(width*.4,height*.55,{steps:12});

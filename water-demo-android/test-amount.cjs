@@ -13,11 +13,11 @@ await page.evaluate(([a,b])=>{amountTest.reset(a);amountTest.set(b);},[from,to])
 assert.equal(await page.locator('#monthAmount .amount-strip').count(),count);
 await page.evaluate(()=>amountTest.tick(.3));
 assert.equal(await page.locator('#monthAmount').innerHTML(),await page.locator('#lightMonthAmount').innerHTML());
-await page.evaluate(()=>amountTest.tick(.38));
+await page.evaluate(()=>amountTest.tick(.8));
 assert.equal(await page.locator('#monthAmount').textContent(),'¥'+to.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}));
 assert.equal(await page.locator('.amount-strip').count(),0);
 }
-await page.evaluate(()=>{amountTest.reset(12);amountTest.set(35);amountTest.tick(.2);amountTest.set(46);amountTest.tick(.68);});
+await page.evaluate(()=>{amountTest.reset(12);amountTest.set(35);amountTest.tick(.2);amountTest.set(46);amountTest.tick(1.1);});
 assert.equal(await page.locator('#monthAmount').textContent(),'¥46.00');
 await page.evaluate(()=>{amountTest.reduce(true);amountTest.set(90);});
 assert.equal(await page.locator('#monthAmount').textContent(),'¥90.00');

@@ -273,10 +273,12 @@
     <section class="settings-card stats-card" role="dialog" aria-modal="true" aria-labelledby="statsModalTitle">
       <p class="expense-kicker">Expense Stats</p>
       <h2 id="statsModalTitle">消费统计</h2>
+      <p id="statsMonthLabel" class="stats-month-label" aria-live="polite"></p>
       <div class="stats-chart-shell">
         <div id="expenseSunburstChart" class="stats-sunburst-chart" role="img" aria-label="本月消费分类旭日图"></div>
         <div id="statsEmptyState" class="stats-empty-state" hidden>本月还没有可统计的消费记录。</div>
       </div>
+      <button id="statsMonthStatus" class="stats-month-status" type="button" hidden></button>
     </section>
   </div>
 

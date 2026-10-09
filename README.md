@@ -1,167 +1,141 @@
-# 额度舱记账
+# 水滴记 / Budget Gauge
 
-一个用仪表盘方式展示每日消费额度的记账 App。
+本仓库保留旧版「额度舱」和新版「水滴记」。**当前开发对象是新版水滴记**。
+本文用于让新会话快速找到新版代码并继续开发，不展开说明 App 的具体功能。
 
-它适合用来快速记录日常消费，并且把“今天还能花多少”直观地显示出来。
+## 当前开发入口
 
-## 主要功能
+截至 2026-10-09：
 
-- 仪表盘显示今日剩余额度
-- 记录每一笔消费金额、时间和用途
-- 查看今天消费记录
-- 查看本月消费汇总
-- 支持本地模式记账
-- 支持连接 Supabase 同步消费数据
-- 支持检测新版本并下载更新
+| 项目 | 新版水滴记 | 旧版额度舱 |
+| --- | --- | --- |
+| Android 工程 | `water-demo-android/` | `android/`（Capacitor） |
+| applicationId | `com.codex.waterdemo` | `com.codex.budgetgauge` |
+| Android 版本 | `2.0.0`，versionCode `20000` | `0.3.1` |
+| 主页面 | `public/water-demo.html` | `index.html` |
+| 安装包交付 | `outputs/water-demo.apk` | 原有发布流程 |
 
-## 快速开始
+新版虽然目录名仍带 `demo`，但已经是当前持续开发和交付的独立 App。
+新版首次以 `v2.0.0` 发布，根目录 `package.json` 与新版 APK 的版本统一为 `2.0.0`。
+旧版 Android 工程仍保留 `0.3.1`，不要使用旧版版本同步脚本更新新版。
+设置页“检查更新”仅在点击时查询 GitHub 最新正式 Release，对比当前安装版本；下载资产固定为 `water-demo.apk`，避免下载旧版安装包。
+后续发布需提升新版 `versionCode` 并保持当前水滴记的包名及签名，才能覆盖安装。当前发布沿用已有测试包签名。
 
-1. 打开 App
-2. 点击仪表盘中间下方的提示文字，先设置每月总额度
-3. 点击仪表盘中央金额区域，记录一笔消费
-4. 点击左下角历史按钮，查看今天或本月消费情况
+## 项目目录
 
-## 额度规则
-
-- 每月总额度：由你手动设置
-- 每天总额度：系统按“每月总额度 / 本月天数”自动计算
-- 当天总额度：根据本月剩余额度自动折算
-- 当天剩余额度：当天总额度减去今天已经记录的消费
-
-仪表盘显示含义：
-
-- 刻度满量程：每天总额度
-- 灰色进度条：当天总额度
-- 彩色进度条：当天剩余额度
-
-## 记账方式
-
-- 点击仪表盘中央金额区域即可新增消费
-- 可以填写消费时间、金额、用途
-- 用途支持快捷选项，也支持手动输入多个标签
-
-## 历史记录
-
-- `今天`：按单笔消费显示
-- `本月`：按天汇总显示
-
-## 本地模式与同步模式
-
-### 本地模式
-
-- 不登录也可以正常使用
-- 数据只保存在当前设备本地
-
-### Supabase 模式
-
-- 登录后可读取和保存当前账号的消费数据
-- 默认只读取当前用户自己的消费记录
-- 本地历史不会自动混入云端历史
-
-Supabase 可以理解成一个可在线访问的数据库服务。这个 App 可以把消费记录保存在 Supabase 中，这样你换设备或重新安装后，登录同一个账号仍然可以读取自己的历史数据。官网：<https://supabase.com/>
-
-#### Supabase 配置要求
-
-如果要使用 Supabase 同步，请先准备好自己的 Supabase 项目，并在 App 设置中填写：
-
-- `Supabase URL`
-- `Supabase Key`
-- 登录邮箱
-- 登录密码
-
-#### 数据表要求
-
-当前 App 默认读取和写入的表名是：
-
-- `money`
-
-表结构需要至少包含以下字段：
-
-- `time`
-  - 类型：`timestamptz`
-  - 用于保存消费时间
-
-- `amount`
-  - 类型：`float`
-  - 用于保存消费金额
-
-- `type`
-  - 类型：`text`
-  - 当前 App 写入的固定值为：`expense`
-
-- `category`
-  - 类型：`text[]`
-  - 用于保存消费用途标签
-  - 例如：`["食", "早饭"]`
-
-- `user_id`
-  - 建议类型：`uuid`
-  - 用于标识这条消费记录属于哪个用户
-  - App 读取数据时会按当前登录用户的 `user_id` 过滤
-
-#### 写入规则
-
-App 新增一笔消费时，写入 Supabase 的数据格式大致如下：
-
-```json
-{
-  "amount": 32.5,
-  "type": "expense",
-  "category": ["食", "早饭"],
-  "time": "2026-04-05T08:30:15.000Z"
-}
+```text
+.
+├── README.md                         # 新会话接手入口
+├── AGENTS.md                         # 执行、构建与发布约束
+├── public/
+│   └── water-demo.html               # 新版主页面源码：水体、手势、页面容器和本地状态
+├── water-record.css                  # 新版嵌入页面的配色与布局覆盖
+├── water-auth.js                     # 新版登录、会话恢复和云端记录适配
+├── script.js                         # 新旧版共用逻辑；包含新版 iframe 适配分支
+├── index.html                        # 旧版页面，也是新版嵌入页面的结构来源
+├── styles.css                        # 共用基础样式
+├── scripts/
+│   ├── build-water-preview.mjs        # 生成新版自包含 HTML
+│   └── sync-version.mjs              # 旧版版本同步脚本
+├── water-demo-android/
+│   ├── build.gradle                  # 新版独立 Android 构建与版本配置
+│   ├── settings.gradle
+│   ├── gradle.properties
+│   ├── src/main/
+│   │   ├── AndroidManifest.xml       # 应用名称、图标、权限和 Activity 配置
+│   │   ├── java/com/codex/waterdemo/MainActivity.java
+│   │   │                             # WebView、传感器、键盘、返回和前后台桥接
+│   │   └── res/drawable/ic_water.xml # 新版图标
+│   ├── LEDGER.md                     # 缓存与云端同步的实现说明
+│   ├── test-*.cjs                    # 逻辑与浏览器检查
+│   ├── check-layout.cjs              # 页面布局检查
+│   └── build/                        # 生成物，不提交
+├── android/                          # 旧版 Capacitor Android 工程；也提供 Gradle wrapper
+├── assets/                           # 共用资源
+├── SUPABASE_EXPENSE_CATEGORIES.md     # 分类数据相关文档，修改时以当前代码为准
+├── package.json / package-lock.json   # Web 依赖及旧版 npm 命令
+├── capacitor.config.json             # 旧版 Capacitor 配置
+└── outputs/                          # 本地 HTML、预览图和 APK，不提交
 ```
 
-说明：
+## 新会话如何继续开发
 
-- `time` 会以标准 ISO 时间写入数据库
-- App 展示时会自动按本地时区显示
-- `category` 会把输入内容按空格、中文逗号、英文逗号切分成数组
+1. 先读 `AGENTS.md`，执行 `git status --short` 和 `git log -5 --oneline`。保留现有未提交改动。
+2. 默认修改新版。主页面和动画主要在 `public/water-demo.html`；记账、历史、统计等嵌入页面主要在 `script.js` 与 `water-record.css`。
+3. `script.js` 同时服务新旧版。修改新版时优先沿用 `isWaterRecordView`、`isWaterPageView` 等适配分支，避免误改旧版。
+4. 涉及登录或消费同步时，再读 `water-auth.js` 和 [LEDGER.md](water-demo-android/LEDGER.md)。本文不代表对线上数据库状态的重新核验。
+5. 涉及 Android 生命周期、重力感应或键盘时，检查新版 `MainActivity.java`。
 
-#### 查询规则
+`public/water-demo.html` 同时包含手写主页面代码和自动生成的 `recordBundle`。
+**不要手动修改 `recordBundle` 的压缩内容**。修改它的来源文件后运行生成脚本。
+生成脚本将 `index.html`、`styles.css`、`water-record.css`、打包后的 `script.js`（含其依赖）嵌入 HTML；主页面通过 `recordFrame`、`sideFrame` 加载嵌入页面。
 
-登录后，App 会：
+当前工作区的实现可能领先于最近一次提交，不能只用 Git 提交说明判断完成状态。
+最近基线提交：`3221703`（独立水滴记），`bee167e`（星点与大额消费标记）。
+后续的前台恢复动画和金额滚动时长调整，在编写本文时仍位于未提交改动中；接手时以实际 `git status` 为准。
 
-- 只读取当前登录用户自己的消费记录
-- 默认读取当前月份的数据
-- “今天”视图按单笔消费显示
-- “本月”视图按天汇总显示
+## 生成与交付
 
-#### 注意事项
+在仓库根目录执行。依赖未安装时先运行 `npm ci`。
 
-- 如果表字段名或字段类型不一致，可能会导致读取或写入失败
-- `type` 字段当前要求使用 `expense`，不要再用旧版本中的 `支出`
-- `category` 当前要求使用小写字段名 `category`，不要使用旧版本中的 `Category`
-- 如果你修改了 Supabase 表结构，App 侧代码也需要同步调整
+生成新版自包含页面：
 
-## 更新方式
+```powershell
+node scripts/build-water-preview.mjs
+```
 
-- 右上角显示 `beta`：当前已是最新版本
-- 右上角显示 `new`：检测到新版本
-- 点击后可以选择：
-  - GitHub
-  - 百度云
+同时更新 `public/water-demo.html` 和 `outputs/water-demo.html`。
+**修改共享脚本或样式后，必须先生成页面，再打包 APK**；Gradle 只复制现有 HTML，不会自动运行上述脚本。
 
-安装新版本时，一般可以直接覆盖安装，无需先卸载旧版本。
+用户要求打包时，使用独立工程：
 
-## 常见问题
+```powershell
+$env:JAVA_HOME = 'E:\Android\jbr'
+& '.\android\gradlew.bat' -p water-demo-android assembleDebug --offline --console=plain
+Copy-Item -LiteralPath 'water-demo-android/build/outputs/apk/debug/WaterDemo-debug.apk' -Destination 'outputs/water-demo.apk' -Force
+```
 
-### 为什么我点更新后会跳到浏览器？
+`JAVA_HOME` 是当前开发机路径；其他机器需要配置自己的 JDK、Android SDK 和 `water-demo-android/local.properties`。
+`--offline` 依赖已缓存的 Gradle/Android 构建组件。当前独立工程使用 compile/target SDK 36、Build Tools 36.1.0，最低 Android API 24。
+交付的是 debug 签名测试包，不等同于正式发布版本。打包后核验 APK 签名。
 
-当前版本使用系统浏览器或下载器来处理安装包下载，这是正常现象。
+开发与交付约定：
 
-### 为什么登录后看到的记录和本地模式不一样？
+- 用户远程查看，功能修改完成后默认打包并交付更新的 APK，不需要用户重复要求；用户明确说先不打包时，改为提供静态预览图。不要只给 HTML。
+- 固定覆盖 `outputs/water-demo.apk`、`outputs/water-demo.html`，避免为小改动积累多个版本。
+- 不更改电脑系统代理。
+- Git 提交按用户要求执行；APK、预览图、附件、本地 SDK 配置不提交。
+- 遵守 `AGENTS.md`：未经明确要求，不运行 `npm run dev`、`npm run android:sync`、`npm run version:sync` 或 Android Studio 构建/同步操作。
+- `npm run android:sync`、`npm run version:sync` 属于旧版工作流，不用来构建新版水滴记。
 
-因为本地模式和 Supabase 模式的数据是分开的。登录后会读取当前账号的数据，不会自动把本地历史上传到云端。
+## 验证入口
 
-### 为什么提示有新版本，但我还没看到变化？
+按改动选择相关检查，不必每次跑全部测试：
 
-App 会在打开时自动检查更新。GitHub 文件更新有时会有短暂缓存，稍后再打开一次通常就会同步。
+| 改动范围 | 检查文件（位于 `water-demo-android/`） |
+| --- | --- |
+| 水体与星点 | `test-water.cjs`、`test-stars.cjs` |
+| 记账与金额动画 | `test-record.cjs`、`test-amount.cjs` |
+| 前台恢复 | `test-foreground.cjs` |
+| 左右、上下页面手势 | `test-side.cjs`、`test-vertical.cjs` |
+| 历史与统计 | `test-browse.cjs` |
+| 登录与同步 | `test-login.cjs`、`test-ledger.cjs` |
+| 键盘、布局与衔接 | `test-keyboard.cjs`、`check-layout.cjs`、`test-transition.cjs` |
 
-## 项目地址
+例如：
 
-- GitHub: [cnjialin/budgetgauge](https://github.com/cnjialin/budgetgauge)
+```powershell
+node water-demo-android/test-stars.cjs
+node water-demo-android/test-record.cjs
+node water-demo-android/test-foreground.cjs
+```
 
-## 说明
+部分浏览器测试目前使用开发机上的 Playwright 和 Edge 绝对路径，且读取生成后的 HTML。
+换机器需调整这些路径；跨月运行时也应检查旧测试中的固定消费日期。
+浏览器或模拟测试通过不代表安卓真机观感已经确认，手势、传感器及 WebView 闪烁仍需 APK 实测。
 
-built with [codex](https://openai.com/codex/)
+## 旧版工程
+
+旧版仍保留仪表盘界面、Capacitor 工程及原发布流程。除非用户明确要求，不将新版作为旧包升级发布，也不自动修改旧版版本、签名或更新地址。
+
+项目地址：[cnjialin/budgetgauge](https://github.com/cnjialin/budgetgauge)。

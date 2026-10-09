@@ -41,7 +41,8 @@ async function runWaterLedger(action, value, notify) {
   const mutation=['ledger-update','ledger-delete'].includes(action);
   const result = mutation?'ledger-mutated':action === 'ledger-save' ? 'ledger-saved' : 'ledger-data';
   const owner = value?.owner;
-  if (action === 'ledger-save' && ledgerWriting) {notify(result,{owner,error:'同步繁忙，稍后重试'});return;}
+  const operationId = value?.operationId;
+  if (action === 'ledger-save' && ledgerWriting) {notify(result,{owner,operationId,error:'同步繁忙，稍后重试'});return;}
   if (action === 'ledger-save') ledgerWriting = true;
   try {
     const active = client;
@@ -61,9 +62,10 @@ async function runWaterLedger(action, value, notify) {
         if(!Number.isFinite(record.amount)||record.amount<=0||!Number.isFinite(new Date(record.time).getTime())||!Array.isArray(record.category)||!record.category.every(c=>typeof c==='string'))throw Error('请检查金额、分类和时间');
         query=active.from('money').update({amount:record.amount,category:record.category.length?record.category:null,time:record.time,type:'expense'});
       }
-      const {data,error}=await query.eq('id',record.id).eq('user_id',auth.user.id).select('id, amount, type, category, time').single();
+      const {data,error}=await query.eq('id',record.id).eq('user_id',auth.user.id).select('id, amount, type, category, time').maybeSingle();
       if(error)throw error;
-      notify(result,{owner,record:data,deleted:action==='ledger-delete'});
+      if(!data&&action==='ledger-update')throw Error('云端记录已删除或不可访问，请核对待同步修改');
+      notify(result,{owner,operationId,record:data||{id:record.id},deleted:action==='ledger-delete'});
     } else if (action === 'ledger-save') {
       const record=value.record;
       if (!Number.isFinite(record?.amount) || record.amount<=0 || !Number.isFinite(new Date(record.time).getTime())) throw Error('请检查金额和时间');
@@ -82,7 +84,7 @@ async function runWaterLedger(action, value, notify) {
       }
       if (!data) throw Error('未收到保存结果，请刷新记录后核对');
       if(Math.round(Number(data.amount)*100)!==Math.round(record.amount*100)||data.type!=='expense'||new Date(data.time).getTime()!==new Date(record.time).getTime()||JSON.stringify(data.category||[])!==JSON.stringify(record.category||[]))throw Error('记录编号冲突，请核对待同步记录');
-      notify(result,{owner,record:data});
+      notify(result,{owner,operationId,record:data});
     } else {
       const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1).toISOString(),end=new Date(now.getFullYear(),now.getMonth()+1,1).toISOString();
       const records=[];
@@ -96,7 +98,7 @@ async function runWaterLedger(action, value, notify) {
       notify(result,{owner,records});
     }
   } catch(error) {
-    notify(result,{owner,error:error.message||'连接失败，请重试'});
+    notify(result,{owner,operationId,error:error.message||'连接失败，请重试'});
   } finally {if(action==='ledger-save')ledgerWriting=false;}
 }
 function checkedConfig(value) {

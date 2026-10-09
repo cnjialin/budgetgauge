@@ -34,3 +34,19 @@ records, response-loss deduplication, reload, read failure and guest separation.
 Existing login, record and water-animation tests cover regressions. Production
 schema/security were inspected read-only; no synthetic expense was inserted into
 the user's live ledger.
+
+## Local-first updates and deletes (2026-10-09)
+
+Updates and deletes now persist in the same account outbox as new records before
+acknowledging the editor. The UI overlays pending operations on the server cache;
+deletes are tombstones until acknowledged, so cloud refreshes cannot resurrect
+them. Cached changes survive reload and cloud failures. Requests run sequentially
+and acknowledge a unique operation ID; newer edits remain pending when an older
+request completes. Consecutive undispatched updates may be merged. Save payloads
+stay immutable for safe lost-response retry. Delete retry accepts an absent row.
+An update of an absent/inaccessible cloud row remains pending with an error.
+
+No server schema or version-based conflict detection was added. Across devices,
+the last successful update wins. Synchronization requires the app to be running;
+local cached data remains usable while connectivity fails. The cache still only
+fetches the current month, and local storage is not an independent backup.

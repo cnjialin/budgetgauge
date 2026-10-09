@@ -62,6 +62,7 @@ const assert = require('node:assert/strict');
       assert(Math.abs(bounds.y + bounds.height / 2 - 422) < 2, 'Month transitions must keep the chart center fixed');
       const transforms = await side.locator('#expenseSunburstChart').evaluate(el => el.getAnimations().flatMap(animation => animation.effect.getKeyframes().map(key => key.transform).filter(Boolean)));
       assert.equal(transforms.length, 0, 'Month transitions must never translate the chart');
+      assert.equal(await side.locator('#expenseSunburstChart').evaluate(el => getComputedStyle(el).opacity), '1', 'Month transitions must not abruptly dim the whole chart');
       await page.waitForTimeout(16);
     }
     await key('ArrowUp'); await expectMonth(-2); assert(await side.locator('#statsEmptyState').isVisible());

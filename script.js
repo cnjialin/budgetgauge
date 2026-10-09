@@ -3508,7 +3508,7 @@ function renderExpenseStats(options = {}) {
 
   const { data, total } = buildExpenseSunburstData();
   updateStatsMonthCaption();
-  const coloredData = applyStatsColorsToSunburstData(data);
+  const coloredData = assignStatsNodeIds(applyStatsColorsToSunburstData(data));
   expenseStatsCurrentTotal = total;
   statsEmptyState.hidden = total > 0;
   expenseSunburstChart.hidden = total <= 0;
@@ -3530,6 +3530,7 @@ function renderExpenseStats(options = {}) {
   chart.setOption({
     backgroundColor: "transparent",
     animationDuration: prepareInitialAnimation ? 1000 : undefined,
+    animationDurationUpdate: 500,
     tooltip: {
       show: false,
     },
@@ -3569,6 +3570,7 @@ function renderExpenseStats(options = {}) {
     ],
     series: [
       {
+        id: "expenseCategories",
         type: "sunburst",
         data: coloredData,
         radius: [0, "100%"],
@@ -3634,7 +3636,7 @@ function renderExpenseStats(options = {}) {
         ],
       },
     ],
-  }, true);
+  }, { notMerge: prepareInitialAnimation || !isWaterPageView });
 
   if (resizeAfterRender) {
     scheduleExpenseStatsResize();
@@ -3802,13 +3804,8 @@ function changeStatsMonth(offset) {
   if (statsFirstMonth && next < statsFirstMonth) { updateStatsMonthCaption('已经是最早的消费月份'); return; }
   statsMonth = next;
   delete statsMonthStatus.dataset.error;
-  renderExpenseStats();
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    expenseSunburstChart.animate([
-      { opacity: 0.25 },
-      { opacity: 1 },
-    ], { duration: 240, easing: 'ease-out' });
-  }
+  // Keep existing sectors so ECharts interpolates their angles to the new month.
+  renderExpenseStats({ resizeAfterRender: false });
 }
 
 function bindStatsMonthNavigation() {
@@ -3851,6 +3848,14 @@ function bindStatsMonthNavigation() {
     changeStatsMonth(event.key === 'ArrowUp' ? -1 : 1);
   });
 
+}
+
+function assignStatsNodeIds(data, path = []) {
+  return data.map(node => {
+    const categoryPath = [...path, node.name];
+    return { ...node, id: JSON.stringify(categoryPath),
+      ...(node.children ? { children: assignStatsNodeIds(node.children, categoryPath) } : {}) };
+  });
 }
 
 function applyStatsColorsToSunburstData(data) {

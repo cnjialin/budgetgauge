@@ -22,6 +22,14 @@ const update = await build({ entryPoints: ['water-update.js'], bundle: true, wri
   format: 'iife', minify: true, target: ['chrome100'] });
 const updateScript = `<script id="updateBundle">${update.outputFiles[0].text.replace(/<\/script/gi, '<\\/script')}</script>`;
 let output = source.replace(/(<script id="recordBundle" type="application\/json">)[\s\S]*?(<\/script>)/, (_, a, b) => a + payload + b);
+const sky = await build({entryPoints:['real-sky.js'],bundle:true,write:false,format:'iife',minify:true,target:['chrome100']});
+const solarWorker=await build({entryPoints:['sky-solar-worker.js'],bundle:true,write:false,format:'iife',minify:true,target:['chrome100']});
+const texture='data:image/jpeg;base64,'+(await fs.readFile('public/milky-way-gaia.jpg')).toString('base64');
+const catalog = (await fs.readFile('public/real-sky-catalog.json','utf8')).replace(/^\uFEFF/,'').trim();
+const skyBundle = `<script id="realSkyCatalog" type="application/json">${catalog.replace(/</g,'\\u003c')}</script>\n<script id="solarWorkerSource" type="application/json">${JSON.stringify(solarWorker.outputFiles[0].text).replace(/</g,'\\u003c')}</script>\n<script id="galaxyTexture" type="application/json">${JSON.stringify(texture)}</script>\n<script id="realSkyBundle">${sky.outputFiles[0].text.replace(/<\/script/gi,'<\\/script')}</script>`;
+output=output.replace(/<script id="realSkyCatalog"[\s\S]*?<script id="realSkyBundle">[\s\S]*?<\/script>\r?\n?/,'');
+output=output.replace('<script id="recordBundle"',()=>skyBundle+'\n<script id="recordBundle"');
+output=output.replace(/\n(?:[ \t]*\n)+(?=<script id="realSkyCatalog")/g,'\n');
 output = output.includes('<script id="updateBundle">')
   ? output.replace(/<script id="updateBundle">[\s\S]*?<\/script>/, () => updateScript)
   : output.replace('</body>', () => updateScript + '\n</body>');

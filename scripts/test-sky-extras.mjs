@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import {calculateSolar} from '../sky-solar-data.js';
+import {brightLimbAngle,SolarRenderer,solarDiscRadius} from '../sky-solar.js';
+import {horizonToGalactic} from '../sky-galaxy.js';
+import {epochPosition,horizontal,sidereal} from '../sky-math.js';
+const RAD=Math.PI/180;
+const time=Date.UTC(2024,3,8,18,17),latitude=32.78,longitude=-96.80;
+const bodies=calculateSolar(time,latitude,longitude);
+assert.equal(bodies.length,9);assert.equal(new Set(bodies.map(b=>b.body)).size,9);
+assert(bodies.every(b=>Number.isFinite(b.ra)&&Number.isFinite(b.dec)&&Number.isFinite(b.magnitude)&&b.distance>0));
+assert(bodies.find(b=>b.body==='Moon').phase<.001,'2024 eclipse is a new Moon');
+assert(calculateSolar(Date.UTC(2024,3,23,23,49),latitude,longitude).find(b=>b.body==='Moon').phase>.999,'Known full Moon is fully lit');
+assert(Math.abs(calculateSolar(Date.UTC(2024,3,15,19,13),latitude,longitude).find(b=>b.body==='Moon').phase-.5)<.01,'Known quarter Moon is half lit');
+const sun=bodies[0],moon=bodies[1],v=b=>[Math.cos(b.dec)*Math.cos(b.ra),Math.cos(b.dec)*Math.sin(b.ra),Math.sin(b.dec)];
+const sr=solarDiscRadius('Sun',sun.distance,390,844),mr=solarDiscRadius('Moon',moon.distance,390,844);
+assert(sr>1.6&&sr<1.9,'Sun follows its roughly half-degree angular diameter');
+assert(mr/sr>.9&&mr/sr<1.15,'Sun and Moon have comparable apparent sizes');
+assert(Math.abs(solarDiscRadius('Sun',sun.distance*2,390,844)*2/sr-1)<.0001,'Apparent size scales with actual distance');
+const vs=v(sun),vm=v(moon),separation=Math.acos(vs.reduce((s,n,i)=>s+n*vm[i],0))/RAD;
+assert(separation<.4,'Sun and Moon align during the Dallas eclipse');
+const up=[1,0,0,0,-1,0,0,0,-1];
+assert(Math.abs(brightLimbAngle([0,0,1],[1,0,0],up,0))<1e-10);
+assert(Math.abs(brightLimbAngle([0,0,1],[0,-1,0],up,0)+Math.PI/2)<1e-10);
+// Galactic centre must stay aligned with its actual equatorial position.
+for(const date of [Date.UTC(2000,0,1,12),Date.UTC(2026,9,10)]){
+ const position=epochPosition([266.4051/15,-28.936175,0,'',0,0],date);
+ const h=horizontal(...position,latitude*RAD,sidereal(date,longitude));
+ const m=horizonToGalactic(date,latitude,longitude);
+ const g=[0,1,2].map(j=>m[j]*h[0]+m[j+3]*h[1]+m[j+6]*h[2]);
+ assert(g[0]>.999999);assert(Math.abs(g[1])<.00001&&Math.abs(g[2])<.00001);
+}
+const workers=[];
+globalThis.Worker=class{constructor(){workers.push(this);}postMessage(m){this.messages??=[];this.messages.push(m);}terminate(){this.stopped=true;}};
+globalThis.document={querySelector:()=>({textContent:'"// worker source"'}),createElement:()=>({getContext:()=>({translate(){},beginPath(){},arc(){},fill(){},moveTo(){},lineTo(){},closePath(){}})})};
+const renderer=new SolarRenderer();renderer.update(time,latitude,longitude);
+assert.equal(workers[0].messages.length,1);const first=workers[0].messages[0];
+workers[0].onmessage({data:{...first,bodies}});renderer.update(time+1000,latitude,longitude);assert.equal(workers[0].messages.length,1,'No ephemeris calculation per frame');
+renderer.update(time+31000,latitude,longitude);assert.equal(workers[0].messages.length,2);
+const second=workers[0].messages[1];renderer.update(time+32000,latitude+1,longitude);
+workers[0].onmessage({data:{...second,bodies:[]}});assert.equal(renderer.bodies.length,9,'Ignore stale replies after location change');
+renderer.dispose();assert.equal(workers[0].stopped,true);
+console.log('PASS: nine bodies, eclipse alignment, full/quarter/new Moon, bright limb, real galactic alignment, cached worker calculation and termination');

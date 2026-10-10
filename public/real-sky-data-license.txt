@@ -1,0 +1,14 @@
+Real sky catalog attribution
+
+Source: HYG Stellar Database v4.1, David Nash / Astronomy Nexus
+https://github.com/astronexus/HYG-Database/blob/main/hyg/CURRENT/hygdata_v41.csv
+https://github.com/astronexus/HYG-Database/blob/main/hyg/README.md
+
+License: Creative Commons Attribution-ShareAlike 4.0 International
+https://creativecommons.org/licenses/by-sa/4.0/
+
+Adaptation: exclude the Sun, filter visual magnitude <= 7, retain J2000
+right ascension (hours), declination (degrees), visual magnitude, B-V color
+index and proper motion (mas/year). The derived real-sky-catalog.json and
+its embedded copy in water-demo.html are distributed under CC BY-SA 4.0.
+The catalog is a stellar map, not a solar-system ephemeris.

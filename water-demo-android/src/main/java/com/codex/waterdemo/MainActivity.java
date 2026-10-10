@@ -30,7 +30,12 @@ import org.json.JSONObject;
 public final class MainActivity extends Activity implements SensorEventListener {
     private WebView web;
     private SensorManager sensors;
-    private Sensor gravitySensor;
+    private Sensor gravitySensor, skySensor;
+    private boolean skyEnabled;
+    private volatile String latestSkyRotation = "";
+    private android.location.LocationManager skyLocations;
+    private android.location.LocationListener skyLocationListener;
+    private final float[] skyRotation = new float[9];
     private boolean enabled, resumed, ready, initialized;
     private long lastFrame;
     private boolean backPending;
@@ -42,6 +47,8 @@ public final class MainActivity extends Activity implements SensorEventListener 
         sensors = (SensorManager) getSystemService(SENSOR_SERVICE);
         gravitySensor = sensors.getDefaultSensor(Sensor.TYPE_GRAVITY);
         if (gravitySensor == null) gravitySensor = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        skySensor = sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+        if (skySensor == null) skySensor = sensors.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR);
         web = new WebView(this);
         web.setBackgroundColor(Color.WHITE);
         web.getSettings().setJavaScriptEnabled(true);
@@ -125,7 +132,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
     public final class SensorBridge {
         @JavascriptInterface public String getAppVersion() {
             try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
-            catch (Exception exception) { return "2.0.0"; }
+            catch (Exception exception) { return "2.0.5"; }
         }
         @JavascriptInterface public boolean openReleaseUrl(String url) {
             Uri uri = Uri.parse(url);
@@ -173,6 +180,20 @@ public final class MainActivity extends Activity implements SensorEventListener 
                 });
             }, "water-release-check").start();
         }
+        @JavascriptInterface public String getSkyRotation() { return latestSkyRotation; }
+        @JavascriptInterface public boolean isSkyAvailable() { return skySensor != null; }
+        @JavascriptInterface public void setSkyEnabled(boolean value) {
+            runOnUiThread(() -> { skyEnabled = value; if (!value) stopSkyLocation(); updateSensors(); });
+        }
+        @JavascriptInterface public float getSkyDeclination(double latitude, double longitude) {
+            return new android.hardware.GeomagneticField((float) latitude, (float) longitude, 0f, System.currentTimeMillis()).getDeclination();
+        }
+        @JavascriptInterface public void requestSkyLocation() { runOnUiThread(() -> {
+            if (!skyEnabled || !resumed) return;
+            if (checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{android.Manifest.permission.ACCESS_COARSE_LOCATION}, 42);
+            } else locateSky();
+        }); }
         @JavascriptInterface public boolean isAvailable() { return gravitySensor != null; }
         @JavascriptInterface public void setEnabled(boolean value) {
             runOnUiThread(() -> {
@@ -218,6 +239,10 @@ public final class MainActivity extends Activity implements SensorEventListener 
 
     private void updateSensors() {
         sensors.unregisterListener(this);
+        latestSkyRotation = "";
+        if (skyEnabled && resumed && skySensor != null) {
+            sensors.registerListener(this, skySensor, 10000);
+        }
         initialized = false;
         lastFrame = 0;
         if (enabled && resumed && gravitySensor != null) {
@@ -226,7 +251,17 @@ public final class MainActivity extends Activity implements SensorEventListener 
     }
 
     @Override public void onSensorChanged(SensorEvent event) {
-        if (!ready || !enabled || !resumed) return;
+        if (!ready || !resumed) return;
+        if (event.sensor == skySensor) {
+            if (!skyEnabled) return;
+            SensorManager.getRotationMatrixFromVector(skyRotation, event.values);
+            // The JS draw frame pulls this latest snapshot. No queued WebView messages.
+            StringBuilder data = new StringBuilder("[");
+            for (int i = 0; i < 9; i++) { if (i > 0) data.append(','); data.append(Float.toString(skyRotation[i])); }
+            latestSkyRotation = data.append(']').toString();
+            return;
+        }
+        if (!enabled) return;
         for (int i = 0; i < 3; i++) {
             float alpha = event.sensor.getType() == Sensor.TYPE_ACCELEROMETER && initialized ? .12f : 1f;
             filtered[i] += alpha * (event.values[i] - filtered[i]);
@@ -248,6 +283,44 @@ public final class MainActivity extends Activity implements SensorEventListener 
             + Float.toString(sx) + ",y:" + Float.toString(sy) + "}}));", null);
     }
 
+    private void stopSkyLocation() {
+        if (skyLocations != null && skyLocationListener != null) skyLocations.removeUpdates(skyLocationListener);
+        skyLocationListener = null;
+    }
+    private void skyLocationError() {
+        if (ready && skyEnabled && resumed) web.evaluateJavascript("window.dispatchEvent(new CustomEvent('waterskylocation',{detail:{error:true}}));", null);
+    }
+    private void locateSky() {
+        if (!skyEnabled || !resumed) return;
+        stopSkyLocation();
+        skyLocations = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
+        try {
+            String provider = skyLocations.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
+                ? android.location.LocationManager.NETWORK_PROVIDER : android.location.LocationManager.GPS_PROVIDER;
+            if (!skyLocations.isProviderEnabled(provider)) { skyLocationError(); return; }
+            skyLocationListener = new android.location.LocationListener() {
+                @Override public void onLocationChanged(android.location.Location location) {
+                    if (skyEnabled && resumed && ready) web.evaluateJavascript("window.dispatchEvent(new CustomEvent('waterskylocation',{detail:{lat:"
+                        + location.getLatitude() + ",lon:" + location.getLongitude() + "}}));", null);
+                    stopSkyLocation();
+                }
+                @Override public void onProviderDisabled(String provider) { stopSkyLocation(); skyLocationError(); }
+                @Override public void onProviderEnabled(String provider) {}
+                @Override public void onStatusChanged(String provider, int status, Bundle extras) {}
+            };
+            skyLocations.requestLocationUpdates(provider, 1000, 0, skyLocationListener);
+            final android.location.LocationListener request = skyLocationListener;
+            web.postDelayed(() -> { if (skyLocationListener == request) { stopSkyLocation(); skyLocationError(); } }, 15000);
+        } catch (Exception exception) { stopSkyLocation(); skyLocationError(); }
+    }
+    @Override public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(code, permissions, results);
+        if (code == 42) {
+            if (results.length > 0 && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) locateSky();
+            else skyLocationError();
+        }
+    }
+
     @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {}
     @Override protected void onResume() {
         super.onResume();
@@ -258,12 +331,14 @@ public final class MainActivity extends Activity implements SensorEventListener 
     }
     @Override protected void onPause() {
         resumed = false;
+        stopSkyLocation();
         sensors.unregisterListener(this);
         web.evaluateJavascript("window.dispatchEvent(new CustomEvent('waterforeground',{detail:{active:false}}));", null);
         web.onPause();
         super.onPause();
     }
     @Override protected void onDestroy() {
+        stopSkyLocation();
         sensors.unregisterListener(this);
         web.removeJavascriptInterface("WaterSensors");
         web.destroy();

@@ -1,0 +1,17 @@
+Solar system calculation: Astronomy Engine, Don Cross / cosinekitty.
+https://github.com/cosinekitty/astronomy
+MIT License; full license at vendor/astronomy-LICENSE.txt. The worker bundle
+preserves the license header. Positions use observer-relative equatorial
+coordinates, corrected for precession, nutation and aberration.
+
+Milky Way texture: Gaia's sky in colour (Gaia DR2), ESA/Gaia/DPAC.
+https://www.esa.int/ESA_Multimedia/Images/2018/04/Gaia_s_sky_in_colour2
+CC BY-SA 3.0 IGO: https://creativecommons.org/licenses/by-sa/3.0/igo/
+Acknowledgement: Gaia Data Processing and Analysis Consortium (DPAC);
+A. Moitinho / A. F. Silva / M. Barros / C. Barata, University of Lisbon,
+Portugal; H. Savietto, Fork Research, Portugal.
+
+The source image is retained without editing. At runtime it is sampled using
+its Hammer projection and transformed from Galactic coordinates to the local
+sky. It is downsampled and dimmed for a diffuse background band. Any derived
+texture is licensed under CC BY-SA 3.0 IGO.

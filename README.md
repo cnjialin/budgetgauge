@@ -5,18 +5,18 @@
 
 ## 当前开发入口
 
-截至 2026-10-09：
+截至 2026-10-10：
 
 | 项目 | 新版水滴记 | 旧版额度舱 |
 | --- | --- | --- |
 | Android 工程 | `water-demo-android/` | `android/`（Capacitor） |
 | applicationId | `com.codex.waterdemo` | `com.codex.budgetgauge` |
-| Android 版本 | `2.0.4`，versionCode `20004` | `0.3.1` |
+| Android 版本 | `2.0.5`，versionCode `20102` | `0.3.1` |
 | 主页面 | `public/water-demo.html` | `index.html` |
 | 安装包交付 | `outputs/water-demo.apk` | 原有发布流程 |
 
 新版虽然目录名仍带 `demo`，但已经是当前持续开发和交付的独立 App。
-新版首次以 `v2.0.0` 发布，当前根目录 `package.json` 与新版 APK 的版本统一为 `2.0.4`。
+新版首次以 `v2.0.0` 发布，当前根目录 `package.json` 与新版 APK 的版本统一为 `2.0.5`（安装序号递增为 `20102`，可覆盖此前 `2.1.0` 测试包）。
 2.0.4 默认分类新增餐饮首项“家庭”和公共交通后的“电动车”。本地仍是旧默认分类时自动使用新默认列表，手动定制过的分类保留。
 旧版 Android 工程仍保留 `0.3.1`，不要使用旧版版本同步脚本更新新版。
 设置页“检查更新”仅在点击时查询 GitHub 最新正式 Release，对比当前安装版本；下载资产固定为 `water-demo.apk`，避免下载旧版安装包。
@@ -24,6 +24,16 @@ Android 更新检查通过原生网络线程请求 API，失败时读取 `public
 后续发布需提升新版 `versionCode` 并保持当前水滴记的包名及签名，才能覆盖安装。当前发布沿用已有测试包签名。
 
 ## 项目目录
+
+设置页新增“真实星空”开关，默认关闭。开启后使用离线 HYG v4.1 星表（7 等及更亮的 15598 颗恒星），按时间、经纬度、恒星自行和岁差计算星图，通过手机背面方向投影到水体内。`real-sky.js` 为计算与生命周期源代码，`public/real-sky-catalog.json` 为筛选后的星表；生成脚本将两者嵌入自包含页面。数据署名与许可见 `public/real-sky-data-license.txt`。
+
+Android 原生方向感应与水体重力开关独立，使用旋转向量及磁偏角校正；设置页仅显示“模拟星河”“真实星空”“日月行星”“银河光带”四个开关，真实星空、日月行星或银河光带任一开启后自动获取当前位置并申请粗略定位权限。模拟星河不依赖配色或定位；模拟星河与真实星空互斥，开启一个会自动关闭另一个。旧版藏蓝配色的星河状态仅在首次升级时迁移为模拟星河开关，此后配色只改变颜色。没有位置或绝对方向时显示设置提示，不伪造朝向。关闭及后台时停止星图计算、方向监听和待处理定位。2.1.0 以约 100Hz 采样手机方向，绘制时直接读取最新采样，避免原生推送排队；通过低延迟四元数平滑旋转，缓存恒星坐标和分组绘制以减少逐帧开销。当前包含恒星、日月行星和真实 Gaia 银河光带，不包含星座连线；硬件罗盘精度与磁干扰需要真机核验。
+
+日月行星由 `sky-solar-worker.js` 在 Worker 中通过 vendored Astronomy Engine 计算（每 30 秒刷新），`sky-solar.js` 将其显示为星点、柔和太阳光盘及朝向正确的月相。`sky-galaxy.js` 用 WebGL 采样 Gaia DR2 Hammer 全天图，将光带按真实银道坐标投影，绘制长边限制为 512 像素后与水体合成。两项均随关闭及后台释放资源；所有资源由生成脚本嵌入单文件，应用运行时不下载星图或计算库。许可见 `public/sky-extras-license.txt` 和 `vendor/astronomy-LICENSE.txt`。
+
+2.0.5 的恒星、日月行星及银河均不限制地平线，仅按当前手机视野投影。真实星点提高亮度；行星统一直径 7 CSS 像素，日月按实际视角大小统一放大 12 倍，在 390 像素宽视野中心约为 42 像素，保留距离变化和真实月相。
+
+验证命令：`node scripts/test-real-sky.mjs`、`node scripts/test-sky-extras.mjs`、`node water-demo-android/test-real-sky.cjs`、`node water-demo-android/test-sky-extras.cjs`、`node water-demo-android/profile-real-sky.cjs`（后三者启动无界面 Edge）。
 
 ```text
 .

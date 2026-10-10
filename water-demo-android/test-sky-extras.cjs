@@ -15,7 +15,7 @@ const assert=require('assert/strict');
    HTMLCanvasElement.prototype.getContext=function(kind,...args){const ctx=getContext.call(this,kind,...args);if(kind==='webgl'&&ctx){skyGL.push(ctx);const draw=ctx.drawArrays.bind(ctx);ctx.drawArrays=(...args)=>{galaxyDraws++;return draw(...args);};}return ctx;};
   });
   await page.goto('file:///E:/codex/outputs/water-demo.html');
-  assert.equal(await page.locator('[role="switch"]').count(),4);
+  assert.equal(await page.locator('[role="switch"]').count(),5);
   await page.mouse.move(195,700);await page.mouse.down();await page.mouse.move(195,300,{steps:10});await page.mouse.up();
   // Solar alone must start tracking without enabling the real-star switch.
   await page.locator('#solarSkyToggle').check();

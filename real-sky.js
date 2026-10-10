@@ -57,9 +57,11 @@ export function installSky() {
   const toggle=document.querySelector('#realSkyToggle'),note=document.querySelector('#realSkyStatus');
   const simulatedToggle=document.querySelector('#simulatedSkyToggle');
   const solarToggle=document.querySelector('#solarSkyToggle'),galaxyToggle=document.querySelector('#galaxySkyToggle');
+  const outsideToggle=document.querySelector('#outsideSkyToggle');
   const native=window.WaterSensors;
   let enabled=false,active=false,rows=null,renderer=null,fallbackRenderer=null,matrix=null,nativeMatrix=false;
   let simulatedEnabled=false;
+  let outsideEnabled=true;
   let solarEnabled=false,galaxyEnabled=false,solar=null,galaxy=null,galaxyUnavailable=false,solarUnavailable=false;
   let gpuScene=null,gpuUnavailable=false;
   let canvasComposite=null;
@@ -148,6 +150,10 @@ export function installSky() {
   }
   toggle.addEventListener('change',()=>setEnabled(toggle.checked,true));
   simulatedToggle?.addEventListener('change',()=>setSimulated(simulatedToggle.checked));
+  outsideToggle?.addEventListener('change',()=>{
+    outsideEnabled=outsideToggle.checked;
+    try{localStorage.setItem('water-outside-sky',outsideEnabled?'1':'0');}catch{}
+  });
   solarToggle?.addEventListener('change',()=>{
     solarEnabled=solarToggle.checked;
     try{localStorage.setItem('water-solar-sky',solarEnabled?'1':'0');}catch{}
@@ -174,6 +180,7 @@ export function installSky() {
   addEventListener('waterforeground',e=>{foreground=e.detail.active;if(foreground)start();else stop();});
   window.WaterRealSky={get enabled(){return wanted();},get starsEnabled(){return enabled;},
     get simulatedEnabled(){return simulatedEnabled;},
+    get outsideEnabled(){return outsideEnabled;},
     get solarEnabled(){return solarEnabled;},get galaxyEnabled(){return galaxyEnabled;},draw(ctx,width,height,fallback,waterPoints,outsideColor){
     if(!active||!location){if(!enabled)fallback?.();return;}
     // Pull at the moment of drawing: native push messages can be a frame late.
@@ -225,6 +232,7 @@ export function installSky() {
     if(waterPoints)canvasComposite.finish(outputCtx,waterPoints,width,height,outsideColor);
   }};
   try{
+    outsideEnabled=localStorage.getItem('water-outside-sky')!=='0';if(outsideToggle)outsideToggle.checked=outsideEnabled;
     solarEnabled=localStorage.getItem('water-solar-sky')==='1';galaxyEnabled=localStorage.getItem('water-galaxy-sky')==='1';
     if(solarToggle)solarToggle.checked=solarEnabled;if(galaxyToggle)galaxyToggle.checked=galaxyEnabled;
   }catch{}

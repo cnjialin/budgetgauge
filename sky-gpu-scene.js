@@ -79,7 +79,7 @@ export class SkyGPUScene{
    if(!this.hasStencil)throw new Error('Sky stencil unavailable');
    if(!this.composite)this.composite=new SkyWaterComposite(gl);
    this.composite.begin(w,h);this.targetFramebuffer=this.composite.framebuffer;
-  }else{this.targetFramebuffer=null;gl.bindFramebuffer(gl.FRAMEBUFFER,null);}
+  }else{this.targetFramebuffer=null;gl.bindFramebuffer(gl.FRAMEBUFFER,null);this.composite?.dispose();this.composite=null;}
   gl.viewport(0,0,w,h);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
   if(galaxyEnabled){if(!this.galaxy)this.galaxy=new GalaxyRenderer(this);this.galaxy.draw(null,m,angle,width,height,time,location.lat,location.lon);}
   else if(this.galaxy){this.galaxy.dispose();this.galaxy=null;}

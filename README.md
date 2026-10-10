@@ -35,7 +35,9 @@ Android 原生方向感应与水体重力开关独立，使用旋转向量及磁
 
 2.1.0 性能优化版由 `sky-gpu-scene.js` 共用一个 WebGL 画布，恒星星表通过 `sky-stars-gpu.js` 一次上传，GPU 每帧完成朝向投影和柔和光晕；恒星与日月行星各一次批量 POINTS 绘制，银河在同一 GPU 上用长边不超过 512 的帧缓冲绘制后合成。整个天空最后仅一次 `drawImage` 合入水体，不在 JS 中逐帧遍历绘制全部恒星。WebGL 不可用或上下文丢失时回退到 Canvas；关闭及后台释放 GPU 资源。验证：`node water-demo-android/test-sky-gpu.cjs`，包含星点投影、月相方向、单次合成、星表不重复上传以及上下文恢复。
 
-2.1.1 测试版取消水体外的星空裁剪：水体内显示原色，外部用当前配色的主题色显示，保留天体位置、透明度和月相。`sky-water-composite.js` 在同一个 GPU 上将天空仅渲染一次到纹理，以实际波浪轮廓生成 stencil，再分别合成内外颜色，最终仍只一次 `drawImage` 进入主画布，不读取像素到 CPU。无 WebGL 设备用 `sky-canvas-composite.js` 对同一张星空缓存着色和裁剪。模拟星河仍仅存在于水体内。
+2.1.1 支持水体外显示星空：水体内显示原色，外部用当前配色的主题色显示，保留天体位置、透明度和月相。`sky-water-composite.js` 在同一个 GPU 上将天空仅渲染一次到纹理，以实际波浪轮廓生成 stencil，再分别合成内外颜色，最终仍只一次 `drawImage` 进入主画布，不读取像素到 CPU。无 WebGL 设备用 `sky-canvas-composite.js` 对同一张星空缓存着色和裁剪。模拟星河仍仅存在于水体内。
+
+“水体外显示星空”开关默认开启，选择单独保存；关闭恢复只在水体内显示，不影响真实星空、日月行星、银河开关，也不单独启动方向监听。关闭时不执行外部着色合成，并释放 GPU 合成纹理。
 
 验证命令：`node scripts/test-real-sky.mjs`、`node scripts/test-sky-extras.mjs`、`node water-demo-android/test-real-sky.cjs`、`node water-demo-android/test-sky-extras.cjs`、`node water-demo-android/profile-real-sky.cjs`（后三者启动无界面 Edge）。
 

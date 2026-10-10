@@ -20,8 +20,21 @@ const assert=require('assert/strict');
    });
    assert.deepEqual(errors,[],'No page errors with GPU '+!disableGPU);
    if(!disableGPU)await page.screenshot({path:'outputs/sky-outside-preview.png'});
+   assert(await page.locator('#outsideSkyToggle').isChecked(),'Outside sky defaults on');
+   await page.evaluate(()=>{const toggle=document.querySelector('#outsideSkyToggle');toggle.checked=false;toggle.dispatchEvent(new Event('change'));});
+   await page.waitForFunction(()=>{
+    const pixels=document.querySelector('#water').getContext('2d').getImageData(0,0,390,300).data;
+    return !pixels.some((v,i)=>i%4===3&&v>0);
+   });
+   assert(await page.evaluate(()=>WaterRealSky.starsEnabled),'Outside switch leaves real sky enabled');
+   await page.reload();assert.equal(await page.locator('#outsideSkyToggle').isChecked(),false,'Outside choice survives reload');
+   await page.evaluate(()=>{const toggle=document.querySelector('#outsideSkyToggle');toggle.checked=true;toggle.dispatchEvent(new Event('change'));});
+   await page.waitForFunction(()=>{
+    const pixels=document.querySelector('#water').getContext('2d').getImageData(0,0,390,300).data;
+    return pixels.some((v,i)=>i%4===3&&v>20);
+   });
    await page.close();
   }
-  console.log('PASS: theme-colored stars visible outside water with GPU and Canvas fallback');
+  console.log('PASS: outside sky switch, saved state, real sky independence, GPU and Canvas fallback');
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -32,6 +32,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
     private SensorManager sensors;
     private Sensor gravitySensor, skySensor;
     private boolean skyEnabled;
+    private boolean skyRegistered, gravityRegistered;
     private volatile String latestSkyRotation = "";
     private android.location.LocationManager skyLocations;
     private android.location.LocationListener skyLocationListener;
@@ -132,7 +133,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
     public final class SensorBridge {
         @JavascriptInterface public String getAppVersion() {
             try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
-            catch (Exception exception) { return "2.0.5"; }
+            catch (Exception exception) { return "2.1.0"; }
         }
         @JavascriptInterface public boolean openReleaseUrl(String url) {
             Uri uri = Uri.parse(url);
@@ -238,15 +239,17 @@ public final class MainActivity extends Activity implements SensorEventListener 
     }
 
     private void updateSensors() {
-        sensors.unregisterListener(this);
-        latestSkyRotation = "";
-        if (skyEnabled && resumed && skySensor != null) {
-            sensors.registerListener(this, skySensor, 10000);
+        boolean wantSky = skyEnabled && resumed && skySensor != null;
+        if (wantSky != skyRegistered) {
+            if (wantSky) skyRegistered = sensors.registerListener(this, skySensor, 10000);
+            else { sensors.unregisterListener(this, skySensor); skyRegistered = false; latestSkyRotation = ""; }
         }
-        initialized = false;
-        lastFrame = 0;
-        if (enabled && resumed && gravitySensor != null) {
-            sensors.registerListener(this, gravitySensor, SensorManager.SENSOR_DELAY_GAME);
+        boolean wantGravity = enabled && resumed && gravitySensor != null;
+        if (wantGravity != gravityRegistered) {
+            initialized = false;
+            lastFrame = 0;
+            if (wantGravity) gravityRegistered = sensors.registerListener(this, gravitySensor, SensorManager.SENSOR_DELAY_GAME);
+            else { sensors.unregisterListener(this, gravitySensor); gravityRegistered = false; }
         }
     }
 
@@ -332,7 +335,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
     @Override protected void onPause() {
         resumed = false;
         stopSkyLocation();
-        sensors.unregisterListener(this);
+        updateSensors();
         web.evaluateJavascript("window.dispatchEvent(new CustomEvent('waterforeground',{detail:{active:false}}));", null);
         web.onPause();
         super.onPause();

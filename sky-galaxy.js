@@ -36,16 +36,18 @@ void main(){
 }`;
 
 export class GalaxyRenderer {
-  constructor() {
-    this.canvas=document.createElement('canvas');this.disposed=false;this.ready=false;
-    const gl=this.canvas.getContext('webgl',{alpha:true,depth:false,stencil:false,antialias:false,premultipliedAlpha:true,powerPreference:'low-power'});
+  constructor(surface=null) {
+    this.shared=!!surface;this.canvas=surface?.canvas||document.createElement('canvas');this.disposed=false;this.ready=false;
+    const gl=surface?.gl||this.canvas.getContext('webgl',{alpha:true,depth:false,stencil:false,antialias:false,premultipliedAlpha:true,powerPreference:'low-power'});
     if(!gl)throw new Error('WebGL unavailable');this.gl=gl;
     this.init();
     this.image=new Image();
     this.image.onload=()=>{if(!this.disposed)this.upload();};
     this.image.src=JSON.parse(document.querySelector('#galaxyTexture').textContent);
-    this.canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.ready=false;});
-    this.canvas.addEventListener('webglcontextrestored',()=>{if(!this.disposed){this.init();if(this.image.complete)this.upload();}});
+    this.onLost=e=>{e.preventDefault();this.ready=false;};
+    this.onRestored=()=>{if(!this.disposed){this.init();if(this.image.complete)this.upload();}};
+    this.canvas.addEventListener('webglcontextlost',this.onLost);
+    this.canvas.addEventListener('webglcontextrestored',this.onRestored);
     this.lastCoordinates=0;
   }
   init() {
@@ -57,12 +59,21 @@ export class GalaxyRenderer {
     gl.useProgram(this.program);
     this.buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
-    const position=gl.getAttribLocation(this.program,'position');gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
+    this.position=gl.getAttribLocation(this.program,'position');
     this.uniforms={};for(const name of ['sky','rightAxis','upAxis','forwardAxis','viewScale','galactic','mapScale'])this.uniforms[name]=gl.getUniformLocation(this.program,name);
     this.texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,this.texture);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
     gl.uniform1i(this.uniforms.sky,0);
+    if(this.shared){
+      this.blitVertex=shader(gl.VERTEX_SHADER,VERTEX);
+      this.blitFragment=shader(gl.FRAGMENT_SHADER,'precision mediump float;varying vec2 uv;uniform sampler2D image;void main(){gl_FragColor=texture2D(image,uv);}');
+      this.blitProgram=gl.createProgram();gl.attachShader(this.blitProgram,this.blitVertex);gl.attachShader(this.blitProgram,this.blitFragment);gl.linkProgram(this.blitProgram);
+      if(!gl.getProgramParameter(this.blitProgram,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(this.blitProgram));
+      this.blitPosition=gl.getAttribLocation(this.blitProgram,'position');
+      gl.useProgram(this.blitProgram);gl.uniform1i(gl.getUniformLocation(this.blitProgram,'image'),0);gl.useProgram(this.program);
+      this.renderTexture=gl.createTexture();this.framebuffer=gl.createFramebuffer();this.targetWidth=this.targetHeight=0;
+    }
   }
   upload() {
     // Inspect the black margin once: ESA's Hammer map sits inside a 1920x1200 image.
@@ -77,14 +88,30 @@ export class GalaxyRenderer {
     // Upload a modest texture once. The light band does not need sharp star pixels.
     const textureCanvas=document.createElement('canvas');textureCanvas.width=1024;textureCanvas.height=Math.round(1024*this.image.height/this.image.width);
     textureCanvas.getContext('2d').drawImage(this.image,0,0,textureCanvas.width,textureCanvas.height);
-    const gl=this.gl;gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,textureCanvas);
+    const gl=this.gl;gl.useProgram(this.program);gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,textureCanvas);
     gl.uniform2fv(this.uniforms.mapScale,this.mapScale);this.ready=true;
   }
   draw(ctx,m,angle,width,height,time,latitude,longitude) {
     if(!this.ready||this.disposed)return;
     // Soft background uses <=512 pixels on its long edge, regardless of phone DPR.
     const scale=Math.min(1,512/Math.max(width,height)),w=Math.max(1,Math.round(width*scale)),h=Math.max(1,Math.round(height*scale));
-    const gl=this.gl;if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;gl.viewport(0,0,w,h);}
+    const gl=this.gl;
+    if(this.shared){
+      gl.bindFramebuffer(gl.FRAMEBUFFER,this.framebuffer);
+      if(w!==this.targetWidth||h!==this.targetHeight){
+        gl.bindTexture(gl.TEXTURE_2D,this.renderTexture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,this.renderTexture,0);
+        if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw new Error('Galaxy framebuffer unavailable');
+        this.targetWidth=w;this.targetHeight=h;
+      }
+    }else if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;}
+    gl.viewport(0,0,w,h);
+    gl.useProgram(this.program);gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);
+    for(let i=0;i<8;i++)gl.disableVertexAttribArray(i);
+    gl.enableVertexAttribArray(this.position);gl.vertexAttribPointer(this.position,2,gl.FLOAT,false,0,0);
+    gl.disable(gl.BLEND);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.texture);
     if(time-this.lastCoordinates>=1000||latitude!==this.latitude||longitude!==this.longitude){
       this.coordinates=horizonToGalactic(time,latitude,longitude);this.lastCoordinates=time;this.latitude=latitude;this.longitude=longitude;
     }
@@ -93,11 +120,19 @@ export class GalaxyRenderer {
     gl.uniform3f(u.upAxis,-m[0]*s+m[1]*c,-m[3]*s+m[4]*c,-m[6]*s+m[7]*c);
     gl.uniform3f(u.forwardAxis,-m[2],-m[5],-m[8]);gl.uniform2f(u.viewScale,width/f,height/f);gl.uniformMatrix3fv(u.galactic,false,this.coordinates);
     gl.drawArrays(gl.TRIANGLES,0,6);
-    ctx.drawImage(this.canvas,0,0,width,height);
+    if(this.shared){
+      gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);
+      gl.useProgram(this.blitProgram);gl.bindTexture(gl.TEXTURE_2D,this.renderTexture);
+      for(let i=0;i<8;i++)gl.disableVertexAttribArray(i);
+      gl.enableVertexAttribArray(this.blitPosition);gl.vertexAttribPointer(this.blitPosition,2,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,6);
+    }
+    if(ctx)ctx.drawImage(this.canvas,0,0,width,height);
   }
   dispose() {
     this.disposed=true;this.ready=false;this.image.onload=null;
+    this.canvas.removeEventListener('webglcontextlost',this.onLost);this.canvas.removeEventListener('webglcontextrestored',this.onRestored);
     const gl=this.gl;gl.deleteTexture(this.texture);gl.deleteBuffer(this.buffer);gl.deleteProgram(this.program);gl.deleteShader(this.vertex);gl.deleteShader(this.fragment);
-    gl.getExtension('WEBGL_lose_context')?.loseContext();this.canvas.width=this.canvas.height=1;
+    if(this.shared){gl.deleteTexture(this.renderTexture);gl.deleteFramebuffer(this.framebuffer);gl.deleteProgram(this.blitProgram);gl.deleteShader(this.blitVertex);gl.deleteShader(this.blitFragment);}
+    if(!this.shared){gl.getExtension('WEBGL_lose_context')?.loseContext();this.canvas.width=this.canvas.height=1;}
   }
 }

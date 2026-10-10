@@ -2,6 +2,8 @@ import {sidereal,horizontal,project,epochPosition,orientationMatrix,rotationQuat
 export {sidereal,horizontal,project,epochPosition,orientationMatrix,rotationQuaternion,interpolateRotation} from './sky-math.js';
 import {SolarRenderer} from './sky-solar.js';
 import {GalaxyRenderer} from './sky-galaxy.js';
+import {GPUStarRenderer} from './sky-stars-gpu.js';
+import {SkyGPUScene} from './sky-gpu-scene.js';
 const RAD=Math.PI/180;
 const starColor=bv=>bv===''?'#e7eeff':Number(bv)>.9?'#ffdab1':Number(bv)<.1?'#c8dcff':'#fff4df';
 const starRadius=mag=>Math.max(.35,2.4*Math.pow(10,-.12*(mag+1.5)));
@@ -43,7 +45,7 @@ export class SkyRenderer {
         if(x< -10||x>width+10||y< -10||y>height+10)continue;
         visible++;ctx.moveTo(x+group.radius,y);ctx.arc(x,y,group.radius,0,Math.PI*2);
       }
-      // Only the few bright stars need a glow; faint stars share one fill per style.
+      // Compatibility fallback only; normal rendering uses soft GPU glow.
       if(visible){if(group.bright){ctx.shadowColor=group.color;ctx.shadowBlur=6;}ctx.fill();ctx.shadowBlur=0;}
     }
     ctx.restore();
@@ -55,9 +57,10 @@ export function installSky() {
   const simulatedToggle=document.querySelector('#simulatedSkyToggle');
   const solarToggle=document.querySelector('#solarSkyToggle'),galaxyToggle=document.querySelector('#galaxySkyToggle');
   const native=window.WaterSensors;
-  let enabled=false,active=false,rows=null,renderer=null,matrix=null,nativeMatrix=false;
+  let enabled=false,active=false,rows=null,renderer=null,fallbackRenderer=null,matrix=null,nativeMatrix=false;
   let simulatedEnabled=false;
   let solarEnabled=false,galaxyEnabled=false,solar=null,galaxy=null,galaxyUnavailable=false,solarUnavailable=false;
+  let gpuScene=null,gpuUnavailable=false;
   const wanted=()=>enabled||solarEnabled||galaxyEnabled;
   let rotation=null,targetRotation=null,lastDraw=0;
   let lastSnapshot='';
@@ -94,7 +97,8 @@ export function installSky() {
     removeEventListener('watersky',receive);removeEventListener('deviceorientationabsolute',receive);removeEventListener('deviceorientation',receive);
     native?.setSkyEnabled?.(false);
     if(watch!==null){navigator.geolocation?.clearWatch(watch);watch=null;}
-    renderer=null;lastEpoch=0;
+    renderer?.dispose?.();renderer=null;fallbackRenderer=null;lastEpoch=0;
+    gpuScene?.dispose();gpuScene=null;gpuUnavailable=false;
     solar?.dispose();solar=null;galaxy?.dispose();galaxy=null;galaxyUnavailable=solarUnavailable=false;
   }
   function start() {
@@ -127,7 +131,7 @@ export function installSky() {
     if(value)setSimulated(false);
     enabled=value;toggle.checked=value;
     try{localStorage.setItem('water-real-sky',value?'1':'0');}catch{}
-    if(!value){renderer=null;lastEpoch=0;}
+    if(!value){renderer?.dispose?.();renderer=null;fallbackRenderer=null;lastEpoch=0;}
     reconcile(gesture);
   }
   function setSimulated(value) {
@@ -182,14 +186,32 @@ export function installSky() {
     let m=interpolateRotation(rotation,targetRotation,1-Math.exp(-dt/.008),smoothedMatrix);
     if(nativeMatrix&&declination){const c=Math.cos(declination*RAD),s=Math.sin(declination*RAD);correctedMatrix.set(m);for(let i=0;i<3;i++){correctedMatrix[i]=c*m[i]+s*m[i+3];correctedMatrix[i+3]=-s*m[i]+c*m[i+3];}m=correctedMatrix;}
     const angle=(screen.orientation?.angle??window.orientation??0)*RAD;
+    if(solarEnabled&&!solarUnavailable){
+      try{if(!solar)solar=new SolarRenderer();solar.update(now,location.lat,location.lon);}
+      catch{solarUnavailable=true;solar?.dispose();solar=null;}
+    }
+    if(!gpuUnavailable){
+      try{
+        if(!gpuScene)gpuScene=new SkyGPUScene();
+        if(gpuScene.draw(ctx,m,angle,width,height,now,location,rows,enabled,galaxyEnabled,solarEnabled?solar:null,fallback))return;
+      }catch{gpuScene?.dispose();gpuScene=null;gpuUnavailable=true;}
+    }
     if(galaxyEnabled&&!galaxyUnavailable){
       try{if(!galaxy)galaxy=new GalaxyRenderer();galaxy.draw(ctx,m,angle,width,height,now,location.lat,location.lon);}
       catch{galaxyUnavailable=true;galaxy?.dispose();galaxy=null;galaxyToggle.title='当前设备暂时无法绘制银河光带';}
     }
     if(enabled){
       if(!rows)rows=JSON.parse(document.querySelector('#realSkyCatalog').textContent).stars;
-      if(!renderer||now-lastEpoch>86400000){renderer=new SkyRenderer(rows,now);lastEpoch=now;}
-      renderer.update(now,location.lat,location.lon);renderer.draw(ctx,m,angle,width,height);
+      if(!renderer||now-lastEpoch>86400000){
+        renderer?.dispose?.();fallbackRenderer=null;
+        try{renderer=new GPUStarRenderer(rows,now);}catch{renderer=new SkyRenderer(rows,now);}
+        lastEpoch=now;
+      }
+      renderer.update(now,location.lat,location.lon);
+      if(renderer.draw(ctx,m,angle,width,height)===false){
+        if(!fallbackRenderer)fallbackRenderer=new SkyRenderer(rows,now);
+        fallbackRenderer.update(now,location.lat,location.lon);fallbackRenderer.draw(ctx,m,angle,width,height);
+      }
     }else fallback?.();
     if(solarEnabled&&!solarUnavailable){
       try{if(!solar)solar=new SolarRenderer();solar.update(now,location.lat,location.lon);solar.draw(ctx,m,angle,width,height);}

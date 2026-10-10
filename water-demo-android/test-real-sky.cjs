@@ -8,7 +8,7 @@ const fs=require('fs');
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>{window.skyCalls=[];window.skySnapshot='';window.WaterSensors={isAvailable:()=>false,isSkyAvailable:()=>true,setEnabled(){},setSkyEnabled:v=>window.skyCalls.push(v),getSkyRotation:()=>window.skySnapshot,getSkyDeclination:()=>0,requestSkyLocation:()=>dispatchEvent(new CustomEvent('waterskylocation',{detail:{lat:31.23,lon:121.47}}))};});
   await page.goto('file:///E:/codex/outputs/water-demo.html');
-  assert.match(await page.locator('#appVersionLabel').textContent(),/2\.0\.5/);
+  assert.match(await page.locator('#appVersionLabel').textContent(),/2\.1\.0/);
   assert.equal(await page.locator('#realSkyToggle').isChecked(),false);
   await page.mouse.move(195,700);await page.mouse.down();await page.mouse.move(195,300,{steps:10});await page.mouse.up();
   await page.locator('#realSkyToggle').check();

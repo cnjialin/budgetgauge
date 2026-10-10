@@ -11,12 +11,12 @@
 | --- | --- | --- |
 | Android 工程 | `water-demo-android/` | `android/`（Capacitor） |
 | applicationId | `com.codex.waterdemo` | `com.codex.budgetgauge` |
-| Android 版本 | `2.1.0`，versionCode `21000` | `0.3.1` |
+| Android 版本 | `2.1.1`，versionCode `21001` | `0.3.1` |
 | 主页面 | `public/water-demo.html` | `index.html` |
 | 安装包交付 | `outputs/water-demo.apk` | 原有发布流程 |
 
 新版虽然目录名仍带 `demo`，但已经是当前持续开发和交付的独立 App。
-新版首次以 `v2.0.0` 发布，当前根目录 `package.json` 与新版 APK 的版本统一为 `2.1.0`（安装序号递增为 `21000`，可覆盖此前 `2.1.0` 测试包）。
+新版首次以 `v2.0.0` 发布，当前根目录 `package.json` 与新版 APK 的版本统一为 `2.1.1`（安装序号递增为 `21001`，可覆盖此前 `2.1.1` 测试包）。
 2.0.4 默认分类新增餐饮首项“家庭”和公共交通后的“电动车”。本地仍是旧默认分类时自动使用新默认列表，手动定制过的分类保留。
 旧版 Android 工程仍保留 `0.3.1`，不要使用旧版版本同步脚本更新新版。
 设置页“检查更新”仅在点击时查询 GitHub 最新正式 Release，对比当前安装版本；下载资产固定为 `water-demo.apk`，避免下载旧版安装包。
@@ -34,6 +34,8 @@ Android 原生方向感应与水体重力开关独立，使用旋转向量及磁
 2.0.5 的恒星、日月行星及银河均不限制地平线，仅按当前手机视野投影。真实星点提高亮度；行星统一直径 7 CSS 像素，日月按实际视角大小统一放大 12 倍，在 390 像素宽视野中心约为 42 像素，保留距离变化和真实月相。
 
 2.1.0 性能优化版由 `sky-gpu-scene.js` 共用一个 WebGL 画布，恒星星表通过 `sky-stars-gpu.js` 一次上传，GPU 每帧完成朝向投影和柔和光晕；恒星与日月行星各一次批量 POINTS 绘制，银河在同一 GPU 上用长边不超过 512 的帧缓冲绘制后合成。整个天空最后仅一次 `drawImage` 合入水体，不在 JS 中逐帧遍历绘制全部恒星。WebGL 不可用或上下文丢失时回退到 Canvas；关闭及后台释放 GPU 资源。验证：`node water-demo-android/test-sky-gpu.cjs`，包含星点投影、月相方向、单次合成、星表不重复上传以及上下文恢复。
+
+2.1.1 测试版取消水体外的星空裁剪：水体内显示原色，外部用当前配色的主题色显示，保留天体位置、透明度和月相。`sky-water-composite.js` 在同一个 GPU 上将天空仅渲染一次到纹理，以实际波浪轮廓生成 stencil，再分别合成内外颜色，最终仍只一次 `drawImage` 进入主画布，不读取像素到 CPU。无 WebGL 设备用 `sky-canvas-composite.js` 对同一张星空缓存着色和裁剪。模拟星河仍仅存在于水体内。
 
 验证命令：`node scripts/test-real-sky.mjs`、`node scripts/test-sky-extras.mjs`、`node water-demo-android/test-real-sky.cjs`、`node water-demo-android/test-sky-extras.cjs`、`node water-demo-android/profile-real-sky.cjs`（后三者启动无界面 Edge）。
 

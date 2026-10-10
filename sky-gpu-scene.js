@@ -2,6 +2,7 @@ import {GPUStarRenderer} from './sky-stars-gpu.js';
 import {GalaxyRenderer} from './sky-galaxy.js';
 import {project} from './sky-math.js';
 import {brightLimbAngle,solarDiscRadius} from './sky-solar.js';
+import {SkyWaterComposite} from './sky-water-composite.js';
 const COLORS={Sun:'#fff2d0',Moon:'#eef3ff',Mercury:'#d8e2ee',Venus:'#fff3d8',Mars:'#ffc1a1',Jupiter:'#fff2d2',Saturn:'#f8e0b4',Uranus:'#bde5f5',Neptune:'#adcaff'};
 const VERTEX=`attribute vec2 position;attribute vec3 color;attribute vec4 style;attribute float opacity;
 uniform float pixelRatio;varying vec3 tint;varying vec4 appearance;varying float alpha;varying float extent;
@@ -61,18 +62,24 @@ class GPUSolarLayer{
 
 export class SkyGPUScene{
  constructor(){
-  this.canvas=document.createElement('canvas');this.gl=this.canvas.getContext('webgl',{alpha:true,depth:false,stencil:false,antialias:false,premultipliedAlpha:true,powerPreference:'high-performance'});
+  this.canvas=document.createElement('canvas');this.gl=this.canvas.getContext('webgl',{alpha:true,depth:false,stencil:true,antialias:false,premultipliedAlpha:true,powerPreference:'high-performance'});
   if(!this.gl)throw new Error('WebGL unavailable');this.disposed=false;
+  this.hasStencil=this.gl.getContextAttributes().stencil;
   this.onLost=e=>{e.preventDefault();this.lost=true;};
   // Lost-context objects have already been invalidated; do not delete them
   // against the restored context. Recreate the solar program lazily.
-  this.onRestored=()=>{this.solar=null;this.lost=false;};
+  this.onRestored=()=>{this.solar=null;this.composite=null;this.targetFramebuffer=null;this.lost=false;};
   this.canvas.addEventListener('webglcontextlost',this.onLost);this.canvas.addEventListener('webglcontextrestored',this.onRestored);
  }
- draw(ctx,m,angle,width,height,time,location,rows,starsEnabled,galaxyEnabled,solar,fallback){
+ draw(ctx,m,angle,width,height,time,location,rows,starsEnabled,galaxyEnabled,solar,fallback,waterPoints,outsideColor){
   if(this.disposed||this.lost||this.gl.isContextLost())return false;
   const gl=this.gl,ratio=Math.min(2,globalThis.devicePixelRatio||1),w=Math.round(width*ratio),h=Math.round(height*ratio);
   if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;}
+  if(waterPoints){
+   if(!this.hasStencil)throw new Error('Sky stencil unavailable');
+   if(!this.composite)this.composite=new SkyWaterComposite(gl);
+   this.composite.begin(w,h);this.targetFramebuffer=this.composite.framebuffer;
+  }else{this.targetFramebuffer=null;gl.bindFramebuffer(gl.FRAMEBUFFER,null);}
   gl.viewport(0,0,w,h);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
   if(galaxyEnabled){if(!this.galaxy)this.galaxy=new GalaxyRenderer(this);this.galaxy.draw(null,m,angle,width,height,time,location.lat,location.lon);}
   else if(this.galaxy){this.galaxy.dispose();this.galaxy=null;}
@@ -82,11 +89,12 @@ export class SkyGPUScene{
   }else{this.stars?.dispose();this.stars=null;fallback?.();}
   if(solar){if(!this.solar)this.solar=new GPUSolarLayer(this);this.solar.draw(solar,m,angle,width,height);}
   else if(this.solar){this.solar.dispose();this.solar=null;}
+  if(waterPoints)this.composite.finish(waterPoints,width,height,outsideColor);
   ctx.drawImage(this.canvas,0,0,width,height);return true;
  }
  dispose(){
   if(this.disposed)return;this.disposed=true;
   this.canvas.removeEventListener('webglcontextlost',this.onLost);this.canvas.removeEventListener('webglcontextrestored',this.onRestored);
-  this.stars?.dispose();this.galaxy?.dispose();this.solar?.dispose();this.gl.getExtension('WEBGL_lose_context')?.loseContext();this.canvas.width=this.canvas.height=1;
+  this.stars?.dispose();this.galaxy?.dispose();this.solar?.dispose();this.composite?.dispose();this.gl.getExtension('WEBGL_lose_context')?.loseContext();this.canvas.width=this.canvas.height=1;
  }
 }

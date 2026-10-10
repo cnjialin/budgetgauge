@@ -133,7 +133,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
     public final class SensorBridge {
         @JavascriptInterface public String getAppVersion() {
             try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
-            catch (Exception exception) { return "2.1.0"; }
+            catch (Exception exception) { return "2.1.1"; }
         }
         @JavascriptInterface public boolean openReleaseUrl(String url) {
             Uri uri = Uri.parse(url);

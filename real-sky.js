@@ -4,6 +4,7 @@ import {SolarRenderer} from './sky-solar.js';
 import {GalaxyRenderer} from './sky-galaxy.js';
 import {GPUStarRenderer} from './sky-stars-gpu.js';
 import {SkyGPUScene} from './sky-gpu-scene.js';
+import {SkyCanvasComposite} from './sky-canvas-composite.js';
 const RAD=Math.PI/180;
 const starColor=bv=>bv===''?'#e7eeff':Number(bv)>.9?'#ffdab1':Number(bv)<.1?'#c8dcff':'#fff4df';
 const starRadius=mag=>Math.max(.35,2.4*Math.pow(10,-.12*(mag+1.5)));
@@ -61,6 +62,7 @@ export function installSky() {
   let simulatedEnabled=false;
   let solarEnabled=false,galaxyEnabled=false,solar=null,galaxy=null,galaxyUnavailable=false,solarUnavailable=false;
   let gpuScene=null,gpuUnavailable=false;
+  let canvasComposite=null;
   const wanted=()=>enabled||solarEnabled||galaxyEnabled;
   let rotation=null,targetRotation=null,lastDraw=0;
   let lastSnapshot='';
@@ -99,6 +101,7 @@ export function installSky() {
     if(watch!==null){navigator.geolocation?.clearWatch(watch);watch=null;}
     renderer?.dispose?.();renderer=null;fallbackRenderer=null;lastEpoch=0;
     gpuScene?.dispose();gpuScene=null;gpuUnavailable=false;
+    canvasComposite?.dispose();canvasComposite=null;
     solar?.dispose();solar=null;galaxy?.dispose();galaxy=null;galaxyUnavailable=solarUnavailable=false;
   }
   function start() {
@@ -171,7 +174,7 @@ export function installSky() {
   addEventListener('waterforeground',e=>{foreground=e.detail.active;if(foreground)start();else stop();});
   window.WaterRealSky={get enabled(){return wanted();},get starsEnabled(){return enabled;},
     get simulatedEnabled(){return simulatedEnabled;},
-    get solarEnabled(){return solarEnabled;},get galaxyEnabled(){return galaxyEnabled;},draw(ctx,width,height,fallback){
+    get solarEnabled(){return solarEnabled;},get galaxyEnabled(){return galaxyEnabled;},draw(ctx,width,height,fallback,waterPoints,outsideColor){
     if(!active||!location){if(!enabled)fallback?.();return;}
     // Pull at the moment of drawing: native push messages can be a frame late.
     if(native?.getSkyRotation){
@@ -193,9 +196,11 @@ export function installSky() {
     if(!gpuUnavailable){
       try{
         if(!gpuScene)gpuScene=new SkyGPUScene();
-        if(gpuScene.draw(ctx,m,angle,width,height,now,location,rows,enabled,galaxyEnabled,solarEnabled?solar:null,fallback))return;
+        if(gpuScene.draw(ctx,m,angle,width,height,now,location,rows,enabled,galaxyEnabled,solarEnabled?solar:null,fallback,waterPoints,outsideColor))return;
       }catch{gpuScene?.dispose();gpuScene=null;gpuUnavailable=true;}
     }
+    const outputCtx=ctx;
+    if(waterPoints){if(!canvasComposite)canvasComposite=new SkyCanvasComposite();ctx=canvasComposite.begin(width,height);}
     if(galaxyEnabled&&!galaxyUnavailable){
       try{if(!galaxy)galaxy=new GalaxyRenderer();galaxy.draw(ctx,m,angle,width,height,now,location.lat,location.lon);}
       catch{galaxyUnavailable=true;galaxy?.dispose();galaxy=null;galaxyToggle.title='当前设备暂时无法绘制银河光带';}
@@ -217,6 +222,7 @@ export function installSky() {
       try{if(!solar)solar=new SolarRenderer();solar.update(now,location.lat,location.lon);solar.draw(ctx,m,angle,width,height);}
       catch{solarUnavailable=true;solar?.dispose();solar=null;solarToggle.title='当前设备暂时无法计算日月行星';}
     }
+    if(waterPoints)canvasComposite.finish(outputCtx,waterPoints,width,height,outsideColor);
   }};
   try{
     solarEnabled=localStorage.getItem('water-solar-sky')==='1';galaxyEnabled=localStorage.getItem('water-galaxy-sky')==='1';

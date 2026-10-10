@@ -37,7 +37,7 @@ void main(){
 
 export class GalaxyRenderer {
   constructor(surface=null) {
-    this.shared=!!surface;this.canvas=surface?.canvas||document.createElement('canvas');this.disposed=false;this.ready=false;
+    this.shared=!!surface;this.surface=surface;this.canvas=surface?.canvas||document.createElement('canvas');this.disposed=false;this.ready=false;
     const gl=surface?.gl||this.canvas.getContext('webgl',{alpha:true,depth:false,stencil:false,antialias:false,premultipliedAlpha:true,powerPreference:'low-power'});
     if(!gl)throw new Error('WebGL unavailable');this.gl=gl;
     this.init();
@@ -121,7 +121,7 @@ export class GalaxyRenderer {
     gl.uniform3f(u.forwardAxis,-m[2],-m[5],-m[8]);gl.uniform2f(u.viewScale,width/f,height/f);gl.uniformMatrix3fv(u.galactic,false,this.coordinates);
     gl.drawArrays(gl.TRIANGLES,0,6);
     if(this.shared){
-      gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);
+      gl.bindFramebuffer(gl.FRAMEBUFFER,this.surface.targetFramebuffer||null);gl.viewport(0,0,this.canvas.width,this.canvas.height);
       gl.useProgram(this.blitProgram);gl.bindTexture(gl.TEXTURE_2D,this.renderTexture);
       for(let i=0;i<8;i++)gl.disableVertexAttribArray(i);
       gl.enableVertexAttribArray(this.blitPosition);gl.vertexAttribPointer(this.blitPosition,2,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,6);

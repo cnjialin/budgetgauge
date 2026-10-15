@@ -4185,13 +4185,14 @@ function renderMonthSummaryRows(summary) {
     : summary;
 
   orderedSummary.forEach((item) => {
+    if(isWaterPageView&&item.dateKey!==expandedMonthDateKey)return;
     const ratio = dailyBudgetLimit > 0 ? Math.max(0, Math.min(item.total / dailyBudgetLimit, 1)) : 0;
     const row = document.createElement("article");
     row.className = "history-item history-item-month";
     if (expandedMonthDateKey === item.dateKey) {
       row.classList.add("is-expanded");
       expandedRow = row;
-    } else if (expandedMonthDateKey) {
+    } else if (expandedMonthDateKey && !isWaterPageView) {
       row.classList.add("is-collapsed-sibling");
     }
     row.tabIndex = 0;

@@ -34,12 +34,23 @@ const assert=require('node:assert/strict');
    });
    for(let cycle=0;cycle<3;cycle++){
     const immediate=await side.locator(`.history-item-month[data-date-key="${key}"]`).evaluate(row=>{
+     const before=row.getBoundingClientRect().top;
      row.click();
      const details=document.querySelector('.history-day-details');
-     return {mounted:!!details,delay:details?.getAnimations()[0]?.effect.getTiming().delay};
+     const siblings=Array.from(document.querySelectorAll('.history-item-month:not(.is-expanded)'));
+     return {mounted:!!details,delay:details?.getAnimations()[0]?.effect.getTiming().delay,
+      jump:Math.abs(document.querySelector('.is-expanded').getBoundingClientRect().top-before),
+      pushDelays:siblings.flatMap(card=>card.getAnimations().map(animation=>animation.effect.getTiming().delay)),
+      siblings:siblings.length,collapsed:siblings.some(card=>card.classList.contains('is-collapsed-sibling')),
+      moving:siblings.some(card=>card.getAnimations().length>0)};
     });
     assert(immediate.mounted,'Details must render in the click task without waiting for outgoing cards');
-    assert(immediate.delay>0&&immediate.delay<200,'Detail reveal follows the selected-card response');
+    assert(immediate.delay>=100&&immediate.delay<420,'Details unfold while the selected date moves into place');
+    assert(immediate.siblings>0,'Visible outgoing dates remain during the push animation');
+    assert.equal(immediate.collapsed,false,'Other dates must not collapse or disappear');
+    assert(immediate.moving,'Other date cards move into their new positions');
+    assert(immediate.jump<2,'Selected date starts at its original position rather than jumping to the top');
+    assert(new Set(immediate.pushDelays).size>1,'Date cards yield one after another with staggered movement');
     if(cycle===0){
      const sequence=await side.locator('.history-item-month.is-expanded').evaluate(row=>{
       const animation=row.getAnimations()[0];animation.pause();animation.currentTime=10;
@@ -55,6 +66,12 @@ const assert=require('node:assert/strict');
     }
     await side.locator('#historyMonthList').evaluate(list=>new Promise(resolve=>{const check=()=>list.classList.contains('history-motion-managed')?requestAnimationFrame(check):resolve();check();}));
     assert.equal(await side.locator('.history-day-details').count(),1);
+    const layout=await side.locator('#historyMonthList').evaluate(list=>{
+     const details=list.querySelector('.history-day-details');
+     const siblings=Array.from(list.querySelectorAll('.history-item-month:not(.is-expanded)'));
+     return siblings.length===0&&list.querySelectorAll('.history-item-month').length===1;
+    });
+    assert(layout,'Detail view contains only the selected date, even when scrolling down');
     assert(await side.locator('#historyMonthList').evaluate(()=>window.rebuilds.filter(r=>r.expanded).every(r=>r.selectedAnimations>0&&r.detailsAnimations>0)),'New detail layout must have first animation frames installed before observers/paint');
     const closing=await side.locator('.history-item-month.is-expanded').evaluate(row=>{
      const key=row.dataset.dateKey;row.click();

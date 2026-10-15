@@ -172,26 +172,13 @@ if (history && document.body.classList.contains('water-record-view')) {
        {clipPath:'inset(0 0 100% 0)',opacity:0,translate:'0 -4px'}],
       {duration:160,fill:'forwards'})));
   };
-  const dismissOtherDays=(nodes,sourceRect)=>{
-    const visible=Array.from(nodes).filter(visibleInList);
-    const center=sourceRect?sourceRect.top+sourceRect.height/2:history.getBoundingClientRect().top;
-    visible.sort((a,b)=>Math.abs(a.getBoundingClientRect().top-center)-Math.abs(b.getBoundingClientRect().top-center));
-    return awaitMotion(visible.map((node,i)=>{
-      const rect=node.getBoundingClientRect();
-      const shift=rect.top+rect.height/2<center?6:-6;
-      return motion(node,
-        [{opacity:1,transform:'translateY(0) scale(1)'},
-         {opacity:0,transform:`translateY(${shift}px) scale(.98)`}],
-        {duration:300,delay:Math.min(i*18,72),easing:'cubic-bezier(.4,0,.2,1)',fill:'both'});
-    }));
-  };
   const unfoldDetails=details=>{
     if(!details)return [];
     detailSeen.add(details);
-    return [motion(details,[{clipPath:'inset(0 0 100% 0)'},{clipPath:'inset(0 0 0% 0)'}],{duration:400,delay:150,easing:'cubic-bezier(.33,0,.5,1)'}),
+    return [motion(details,[{clipPath:'inset(0 0 100% 0)'},{clipPath:'inset(0 0 0% 0)'}],{duration:280,delay:140,easing:'cubic-bezier(.33,0,.5,1)'}),
       ...Array.from(details.children).filter(visibleInList).map((row,i)=>motion(row,
         [{opacity:0,translate:'0 -12px'},{opacity:1,translate:'0 0'}],
-        {duration:280,delay:150+Math.min(i*42,210),easing:'cubic-bezier(.25,.1,.25,1)'}))];
+        {duration:220,delay:140+Math.min(i*24,96),easing:'cubic-bezier(.25,.1,.25,1)'}))];
   };
   window.WaterHistoryMotion={
     async transition(dateKey,opening,render){
@@ -200,7 +187,7 @@ if (history && document.body.classList.contains('water-record-view')) {
       historyBusy=true;observer.disconnect();
       history.classList.add('history-motion-managed');
       const source=Array.from(history.querySelectorAll('.history-item-month')).find(row=>row.dataset.dateKey===dateKey);
-      if(opening)overviewScroll=history.scrollTop;
+      if(opening&&!history.querySelector('.is-expanded'))overviewScroll=history.scrollTop;
       let outgoingLayer=null;
       try {
         const outgoing=opening
@@ -217,9 +204,13 @@ if (history && document.body.classList.contains('water-record-view')) {
         paintHistoryHeading();
         if(outgoingLayer)history.append(outgoingLayer);
         const outgoingFinished=outgoingLayer
-          ?(opening?dismissOtherDays(outgoingLayer.children,sourceRect):fold(outgoingLayer.children))
+          ?opening?awaitMotion(Array.from(outgoingLayer.children).map((row,i)=>{
+            const distance=Math.max(0,history.getBoundingClientRect().bottom-row.getBoundingClientRect().top)+12;
+            return motion(row,[{transform:'translateY(0)'},{transform:`translateY(${distance}px)`}],
+              {duration:340,delay:30+Math.min(i*20,100),easing:'cubic-bezier(.4,0,.2,1)',fill:'both'});
+          })):fold(outgoingLayer.children)
           :Promise.resolve();
-        const target=Array.from(history.querySelectorAll('.history-item-month')).find(row=>row.dataset.dateKey===dateKey);
+        const target=Array.from(history.querySelectorAll(':scope > .history-item-month')).find(row=>row.dataset.dateKey===dateKey);
         const animations=[];
         if(target&&sourceRect){
           const rect=target.getBoundingClientRect();
@@ -227,23 +218,25 @@ if (history && document.body.classList.contains('water-record-view')) {
           const selectedBorder='rgb(85, 85, 85)';
           animations.push(motion(target,opening?[
             {transform:from,borderColor:normalBorder,easing:'ease-out'},
-            {transform:from,borderColor:selectedBorder,offset:.18,easing:ease},
+            {transform:from,borderColor:selectedBorder,offset:.14,easing:'cubic-bezier(.4,0,.2,1)'},
             {transform:'translate(0,0)',borderColor:selectedBorder}
           ]:[
             {transform:from,borderColor:selectedBorder,easing:ease},
             {transform:'translate(0,0)',borderColor:selectedBorder,offset:.8,easing:'ease-in-out'},
             {transform:'translate(0,0)',borderColor:normalBorder}
-          ],{duration:340,easing:'linear'}));
+          ],{duration:420,easing:'linear'}));
         }
         if(opening){
           animations.push(...unfoldDetails(history.querySelector('.history-day-details')));
-        }else{
+        }
+        if(!opening){
           let index=0;
-          history.querySelectorAll('.history-item-month').forEach(row=>{
+          history.querySelectorAll(':scope > .history-item-month').forEach(row=>{
             if(!visibleInList(row))return;
             seen.add(row.dataset.dateKey);
             if(row===target)return;
-            animations.push(slideDayIn(row,index++));
+            animations.push(motion(row,[{opacity:0,translate:'-56px 0'},{opacity:1,translate:'0 0'}],
+              {duration:300,delay:Math.min(index++*20,100)}));
           });
         }
         await Promise.all([awaitMotion(animations),outgoingFinished]);

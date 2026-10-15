@@ -53,7 +53,7 @@ const assert=require('node:assert/strict');
      assert.notEqual(sequence.first.border,sequence.second.border);
      assert(Math.abs(sequence.moving-sequence.first.y)>2,'Selected date subsequently moves');
     }
-    await page.waitForTimeout(680);
+    await side.locator('#historyMonthList').evaluate(list=>new Promise(resolve=>{const check=()=>list.classList.contains('history-motion-managed')?requestAnimationFrame(check):resolve();check();}));
     assert.equal(await side.locator('.history-day-details').count(),1);
     assert(await side.locator('#historyMonthList').evaluate(()=>window.rebuilds.filter(r=>r.expanded).every(r=>r.selectedAnimations>0&&r.detailsAnimations>0)),'New detail layout must have first animation frames installed before observers/paint');
     const closing=await side.locator('.history-item-month.is-expanded').evaluate(row=>{
@@ -65,7 +65,7 @@ const assert=require('node:assert/strict');
     assert.equal(closing.border,'rgb(85, 85, 85)','Keep the selected outline while the card moves home');
     assert.equal(closing.details,0,'Restore overview immediately during collapse');
     assert(closing.folding,'Detail cards must actually animate out');
-    await page.waitForTimeout(680);
+    await side.locator('#historyMonthList').evaluate(list=>new Promise(resolve=>{const check=()=>list.classList.contains('history-motion-managed')?requestAnimationFrame(check):resolve();check();}));
     assert.equal(await side.locator('.history-day-details').count(),0);
     const restored=await side.locator(`.history-item-month[data-date-key="${key}"]`).boundingBox();
     assert.equal(await side.locator(`.history-item-month[data-date-key="${key}"]`).evaluate(e=>getComputedStyle(e).borderColor),'rgb(221, 221, 221)','Restore the ordinary outline only after returning');

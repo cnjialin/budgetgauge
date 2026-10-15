@@ -83,12 +83,15 @@ if (history && document.body.classList.contains('water-record-view')) {
   const seen = new Set();
   let armed = false;
   let historyEpoch=0,historyBusy=false,overviewScroll=0,closePromise=null;
+  const slideDayIn=(row,index)=>{
+    return motion(row,
+      [{opacity:0,translate:'-56px 0'},{opacity:1,translate:'0 0'}],
+      {duration:420,delay:Math.min(index*60,360)});
+  };
   const revealRow=(row,index)=>{
     if(seen.has(row.dataset.dateKey)){row.classList.remove('history-row-pending');return;}
     seen.add(row.dataset.dateKey);
-    if(!history.querySelector('.is-expanded'))motion(row,
-      [{clipPath:'inset(0 0 100% 0)',translate:'0 -10px'},{clipPath:'inset(0 0 0% 0)',translate:'0 0'}],
-      {duration:280,delay:Math.min(index*32,160)});
+    if(!history.querySelector('.is-expanded'))slideDayIn(row,index);
     row.classList.remove('history-row-pending');
   };
   const observer = new IntersectionObserver(entries => {
@@ -169,6 +172,19 @@ if (history && document.body.classList.contains('water-record-view')) {
        {clipPath:'inset(0 0 100% 0)',opacity:0,translate:'0 -4px'}],
       {duration:160,fill:'forwards'})));
   };
+  const dismissOtherDays=(nodes,sourceRect)=>{
+    const visible=Array.from(nodes).filter(visibleInList);
+    const center=sourceRect?sourceRect.top+sourceRect.height/2:history.getBoundingClientRect().top;
+    visible.sort((a,b)=>Math.abs(a.getBoundingClientRect().top-center)-Math.abs(b.getBoundingClientRect().top-center));
+    return awaitMotion(visible.map((node,i)=>{
+      const rect=node.getBoundingClientRect();
+      const shift=rect.top+rect.height/2<center?6:-6;
+      return motion(node,
+        [{opacity:1,transform:'translateY(0) scale(1)'},
+         {opacity:0,transform:`translateY(${shift}px) scale(.98)`}],
+        {duration:300,delay:Math.min(i*18,72),easing:'cubic-bezier(.4,0,.2,1)',fill:'both'});
+    }));
+  };
   const unfoldDetails=details=>{
     if(!details)return [];
     detailSeen.add(details);
@@ -200,7 +216,9 @@ if (history && document.body.classList.contains('water-record-view')) {
         history.scrollTop=opening?0:overviewScroll;
         paintHistoryHeading();
         if(outgoingLayer)history.append(outgoingLayer);
-        const outgoingFinished=outgoingLayer?fold(outgoingLayer.children).finally(()=>outgoingLayer.remove()):Promise.resolve();
+        const outgoingFinished=outgoingLayer
+          ?(opening?dismissOtherDays(outgoingLayer.children,sourceRect):fold(outgoingLayer.children))
+          :Promise.resolve();
         const target=Array.from(history.querySelectorAll('.history-item-month')).find(row=>row.dataset.dateKey===dateKey);
         const animations=[];
         if(target&&sourceRect){
@@ -225,9 +243,7 @@ if (history && document.body.classList.contains('water-record-view')) {
             if(!visibleInList(row))return;
             seen.add(row.dataset.dateKey);
             if(row===target)return;
-            animations.push(motion(row,
-              [{clipPath:'inset(0 0 100% 0)',opacity:0},{clipPath:'inset(0 0 0% 0)',opacity:1}],
-              {duration:240,delay:Math.min(index++*12,48)}));
+            animations.push(slideDayIn(row,index++));
           });
         }
         await Promise.all([awaitMotion(animations),outgoingFinished]);

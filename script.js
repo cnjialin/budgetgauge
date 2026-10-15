@@ -535,7 +535,8 @@ async function initialize() {
         const distance=Math.abs(dx),speed=distance/Math.max(1,performance.now()-gesture.time);
         if(horizontal&&distance>10)suppressBrowseClickUntil=performance.now()+400;
         const enough=distance>=Math.min(42,innerWidth*.1)||(distance>=24&&speed>.35);
-        if(horizontal&&enough&&(waterBrowsePage==='history'?dx<0:dx>0))closeWaterBrowsePage();
+        const dayDetailsOpen=waterBrowsePage==='history'&&Boolean(expandedMonthDateKey);
+        if(horizontal&&enough&&(dayDetailsOpen||(waterBrowsePage==='history'?dx<0:dx>0)))closeWaterBrowsePage();
       };
       // Touch events survive the pointercancel emitted when Android starts a pan.
       // Lock the direction early: vertical gestures remain native list scrolling.
@@ -1303,6 +1304,13 @@ function closeHistoryModal() {
 let waterBrowseClosing=false;
 async function closeWaterBrowsePage(){
   if(waterBrowseClosing)return;
+  if(!historyModal.hidden){
+    if(historyDetailTransitioning)return;
+    if(expandedMonthDateKey){
+      await toggleMonthDayDetails(expandedMonthDateKey);
+      return;
+    }
+  }
   waterBrowseClosing=true;
   try{
     if(!historyModal.hidden)await window.WaterHistoryMotion?.close();

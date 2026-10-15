@@ -15,7 +15,7 @@ for (const s of ['#entryDisk', 'main', '#water', '#count', '#caption', '#status'
     addEventListener(n, f) { this.handlers[n] = f; }, setAttribute() {} };
 }
 const env = {
-  document: { hidden: false, querySelector: s => nodes[s], addEventListener() {} },
+  document: { hidden: false, querySelector: s => nodes[s], querySelectorAll:()=>[], addEventListener() {} },
   matchMedia: () => ({ matches: false }), innerWidth: 390, innerHeight: 844, devicePixelRatio: 1,
   requestAnimationFrame: f => frame = f, addEventListener: (n, f) => events[n] = f,
   removeEventListener: n => delete events[n], setTimeout: () => 1, clearTimeout() {},
@@ -133,7 +133,7 @@ function spawn(event) {
   let compositorAnimation;
   nodes['#entryDisk'].animate = (keyframes, options) => {
     assert(keyframes.every(k => Object.keys(k).length === 1 && k.transform));
-    assert(options.duration === 360 || Math.abs(options.duration - 560) < 1);
+    assert(options.duration === 200 || Math.abs(options.duration - 560) < 1);
     compositorAnimation = { cancel() {}, currentTime: 0 };
     return compositorAnimation;
   };

@@ -140,7 +140,30 @@ body.water-record-view {
   height: var(--record-ring-size);
 }
 .water-record-view .record-amount-field { grid-template-columns: auto auto; }
+.water-record-view .record-amount-field { align-items:baseline; }
 .water-record-view .record-amount-field input { max-width: 260px; }
+.water-record-view .record-time-field,
+.water-record-view .record-category-field {
+  grid-template-columns:22px minmax(64px,max-content) minmax(0,1fr);
+  align-items:center; text-align:left;
+}
+.water-record-view .record-time-label,
+.water-record-view .record-category-label,
+.water-record-view .record-time-field .expense-datetime-trigger,
+.water-record-view .record-category-field input {
+  box-sizing:border-box; height:32px; min-height:32px; margin:0; padding:6px 0;
+  font-family:inherit; font-size:.875rem; font-weight:400; line-height:20px;
+  letter-spacing:normal; text-align:left;
+}
+.water-record-view .record-time-field .expense-datetime-trigger {
+  display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.water-record-view .record-category-field input { border-radius:0; }
+.water-record-view .record-category-field input::placeholder {
+  font-family:inherit; font-size:inherit; font-weight:inherit; font-style:inherit;
+  letter-spacing:inherit; color:var(--water-muted,#999)!important; opacity:1;
+}
+.water-record-view .record-amount-label { font-size:.875rem; font-weight:400; line-height:20px; }
 .water-record-view .record-action-dock { bottom: max(32px, env(safe-area-inset-bottom)); }
 .water-record-view .record-status { bottom: 8px; font-size: 12px; }
 .water-record-view[data-mode="record"] .record-head-content { top: 8px; }
@@ -191,7 +214,7 @@ body.water-record-view { --page-bg: var(--water-ink,#000); --page-bg-top: var(--
 .water-record-view .record-gauge-content .category-wheel { --category-highlight:var(--water-panel,#222); --category-divider:var(--water-line,#444); border-color:var(--water-line,#444); }
 .water-record-view .category-divider,
 .water-record-view .time-wheel-shell::before { background:var(--water-line,#444); }
-.water-record-view .category-wheel-center { border-color:var(--water-line,#444); }
+.water-record-view .category-wheel-center { border:1px solid var(--water-line,#444); box-sizing:border-box; z-index:5; }
 .water-record-view .expense-round-btn.confirm,
 .water-record-view #waterKeypad .quick-expense-continue-btn,
 .water-record-view .expense-btn.primary { background:#fff; color:var(--water-ink,#000) !important; border-color:#fff; }

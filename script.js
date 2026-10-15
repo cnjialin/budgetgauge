@@ -535,7 +535,7 @@ async function initialize() {
         const distance=Math.abs(dx),speed=distance/Math.max(1,performance.now()-gesture.time);
         if(horizontal&&distance>10)suppressBrowseClickUntil=performance.now()+400;
         const enough=distance>=Math.min(42,innerWidth*.1)||(distance>=24&&speed>.35);
-        if(horizontal&&enough&&(waterBrowsePage==='history'?dx<0:dx>0))notifyWaterEditor('page-close');
+        if(horizontal&&enough&&(waterBrowsePage==='history'?dx<0:dx>0))closeWaterBrowsePage();
       };
       // Touch events survive the pointercancel emitted when Android starts a pan.
       // Lock the direction early: vertical gestures remain native list scrolling.
@@ -588,8 +588,8 @@ async function initialize() {
         waterBrowsePage=event.data.record.page;
         closeExpenseModal({waterInternal:true,render:false,focus:false});
         closeDeleteConfirmModal();
-        waterStatsWaiting=waterBrowsePage==='stats';
-        if(waterBrowsePage==='history')openHistoryModal();else openStatsModal({deferAnimation:true});
+        waterStatsWaiting=false;
+        if(waterBrowsePage==='history')openHistoryModal();else openStatsModal();
         notifyWaterEditor('page-prepared',{page:waterBrowsePage});
         return;
       }
@@ -613,7 +613,7 @@ async function initialize() {
       if(isWaterPageView && event.data.action==='browse-back') {
         if(!deleteConfirmModal.hidden){closeDeleteConfirmModal();return;}
         if(isExpenseMode){closeExpenseModal({waterInternal:true,render:false,focus:false});openHistoryModal();return;}
-        notifyWaterEditor('page-close');return;
+        closeWaterBrowsePage();return;
       }
       if(['ledger-load','ledger-save','ledger-update','ledger-delete','ledger-stats'].includes(event.data.action)) {
         waterLedger(event.data.action,event.data.record,notifyWaterEditor);return;
@@ -1290,7 +1290,7 @@ async function openHistoryModal() {
 }
 
 function closeHistoryModal() {
-  if(isWaterPageView){notifyWaterEditor('page-close');return;}
+  if(isWaterPageView){closeWaterBrowsePage();return;}
   closeDeleteConfirmModal();
   hidePageView(historyModal);
   historyCard.setAttribute("role", "dialog");
@@ -1298,6 +1298,16 @@ function closeHistoryModal() {
   setActiveMainView("home");
   renderGauge();
   openHistoryBtn.focus();
+}
+
+let waterBrowseClosing=false;
+async function closeWaterBrowsePage(){
+  if(waterBrowseClosing)return;
+  waterBrowseClosing=true;
+  try{
+    if(!historyModal.hidden)await window.WaterHistoryMotion?.close();
+    notifyWaterEditor('page-close');
+  }finally{waterBrowseClosing=false;}
 }
 
 function openStatsModal({deferAnimation=false}={}) {
@@ -1314,6 +1324,11 @@ function openStatsModal({deferAnimation=false}={}) {
   statsCard.removeAttribute("aria-modal");
   setActiveMainView("stats");
   updateStatsMonthCaption();
+  if(isWaterPageView&&!deferAnimation){
+    expenseSunburstChart.style.visibility='visible';
+    renderExpenseStats({prepareInitialAnimation:true,resizeAfterRender:false});
+    return;
+  }
   if(deferAnimation){
     const {total}=buildExpenseSunburstData();
     statsEmptyState.hidden=total>0;expenseSunburstChart.hidden=total<=0;
@@ -2059,6 +2074,10 @@ async function deleteExpenseRecord(record) {
 }
 
 function playCategoryWheelTransition() {
+  if(isWaterRecordView){
+    document.dispatchEvent(new Event('water-category-enter'));
+    return;
+  }
   categoryOptions.classList.remove("is-entering");
   categoryDividers.classList.remove("is-entering");
   categoryOptions.getBoundingClientRect();
@@ -4192,7 +4211,7 @@ function renderMonthSummaryRows(summary) {
     }
   });
 
-  if (expandedRow) {
+  if (expandedRow && !historyMonthList.classList.contains('history-motion-managed')) {
     requestAnimationFrame(() => {
       historyMonthList.scrollTo({
         top: 0,
@@ -4238,6 +4257,16 @@ async function toggleMonthDayDetails(dateKey) {
   }
 
   const nextExpandedDateKey = expandedMonthDateKey === dateKey ? "" : dateKey;
+  if(isWaterPageView&&window.WaterHistoryMotion){
+    historyDetailTransitioning=true;
+    try{
+      await window.WaterHistoryMotion.transition(dateKey,Boolean(nextExpandedDateKey),()=>{
+        expandedMonthDateKey=nextExpandedDateKey;
+        renderMonthHistory();
+      });
+    }finally{historyDetailTransitioning=false;}
+    return;
+  }
   if (nextExpandedDateKey) {
     const sourceRow = historyMonthList.querySelector(`[data-date-key="${dateKey}"]`);
 

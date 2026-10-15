@@ -15,7 +15,7 @@ for(const id of ['main','#water','#entryDisk','#count','#caption','#status','#mo
 }
 nodes['#recordBundle'].textContent = JSON.stringify(editor);
 nodes['#recordFrame'].contentWindow = {postMessage:message=>messages.push(message)};
-const env = {document:{hidden:false,querySelector:id=>nodes[id],addEventListener(){}},matchMedia:()=>({matches:false}),
+const env = {document:{hidden:false,querySelector:id=>nodes[id],querySelectorAll:()=>[],addEventListener(){}},matchMedia:()=>({matches:false}),
   innerWidth:390,innerHeight:844,devicePixelRatio:1,requestAnimationFrame:f=>frame=f,
   addEventListener:(n,f)=>events[n]=f,removeEventListener(){},setTimeout:()=>1,clearTimeout(){},
   localStorage:{getItem:k=>store.get(k)||null,setItem(k,v){if(failSave)throw Error('Storage unavailable');store.set(k,v);}}};
@@ -51,7 +51,7 @@ cancelAnimation.onfinish();
 delete nodes['#entryDisk'].animate;
 tick(40);assert(env.probe().count===0&&env.probe().drops===0,'Cancel must not emit a drop');
 open();
-const record={amount:28.5,category:['餐饮','午餐','炒菜'],purpose:'餐饮 午餐 炒菜',time:'2026-09-26T04:30:00.000Z'};
+const record={amount:28.5,category:['餐饮','午餐','炒菜'],purpose:'餐饮 午餐 炒菜',time:new Date().toISOString()};
 failSave=true;send('save',record);assert(env.probe().state==='black'&&messages.at(-1).error);
 failSave=false;send('save',record);assert(env.probe().state==='shrinking');
 send('save',record);assert(JSON.parse(store.get('water-demo-records')).length===1,'Duplicate save must not duplicate records');

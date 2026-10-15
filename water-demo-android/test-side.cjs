@@ -35,12 +35,12 @@ const area=p=>Math.abs(p.reduce((a,v,i)=>{const n=p[(i+1)%p.length];return a+v.x
    await page.waitForTimeout(1000);
    const landed=await page.evaluate(()=>sideProbe());assert.equal(landed.count,original.count);assert.equal(landed.target,original.target);
    // A short drag cancels without opening the amount editor.
-   await page.mouse.move(width*.8,height*.55);await page.mouse.down();await page.mouse.move(width*.7,height*.55,{steps:5});await page.mouse.up();await page.waitForTimeout(550);
+   await page.mouse.move(width*.8,height*.55);await page.mouse.down();await page.mouse.move(width*.7,height*.55,{steps:5});await page.waitForTimeout(120);await page.mouse.up();await page.waitForTimeout(550);
    assert.equal(await page.evaluate(()=>sideProbe().progress),0);assert(await page.locator('#recordFrame').isHidden());
    await page.mouse.move(width*.15,height*.55);await page.mouse.down();await page.mouse.move(width*.65,height*.55,{steps:15});await page.waitForTimeout(100);
    const reverse=await page.evaluate(()=>sideProbe());assert.equal(reverse.direction,-1);assert(Math.abs(area(reverse.polygon)-original.area)<1);
    await page.mouse.up();await page.waitForTimeout(550);assert.equal(await page.frameLocator('#sideFrame').locator('#historyModalTitle').textContent(),'历史消费');
-   assert(await page.evaluate(()=>waterBack()));await page.waitForTimeout(550);
+    assert(await page.evaluate(()=>waterBack()));await page.waitForFunction(()=>sideProbe().progress===0);
    assert.equal(await page.evaluate(()=>sideProbe().progress),0);
    assert.equal(await page.locator('#monthAmount').textContent(),'¥2,000.00');assert.deepEqual(errors,[]);
    await page.locator('#water').focus();await page.keyboard.press('ArrowUp');await page.waitForTimeout(650);assert.equal(await page.locator('#settingsPage').getAttribute('aria-hidden'),'false');

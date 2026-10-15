@@ -13,8 +13,8 @@ android {
         applicationId 'com.codex.waterdemo'
         minSdk 24
         targetSdk 36
-        versionCode 21001
-        versionName '2.1.1'
+        versionCode 21002
+        versionName '2.1.2'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

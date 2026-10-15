@@ -20,7 +20,10 @@ const assert=require('assert');
    }
    throw Error('Editor never appeared');
   },{x,y});
-  assert(result.covered&&result.gap<40&&result.ready&&result.below,JSON.stringify(result));
+  assert(result.covered&&result.gap<25&&result.ready&&result.below,JSON.stringify(result));
+  assert(result.elapsed<290,'The prepared keypad should appear after the 200ms expansion: '+JSON.stringify(result));
+  await page.frameLocator('#recordFrame').locator('[data-amount-key="3"]').click();
+  assert.equal(Number(await page.frameLocator('#recordFrame').locator('#remainingBudget').textContent()),3,'Keypad must accept input immediately after handoff');
   console.log('PASS',x,y,result);
  }
  await browser.close();

@@ -1,0 +1,39 @@
+/* Motion only: preserve the original geometry, colors, typography and controls. */
+.water-record-view .category-wheel.category-fan-active { background:transparent!important; border-color:transparent!important; }
+.water-record-view .category-wheel.category-fan-active::after { opacity:0; }
+.water-scroll-heading {
+  --heading-progress:0;
+  position:sticky; top:0; z-index:6; flex-shrink:0;
+  padding-top:calc(var(--page-heading-top) * (1 - var(--heading-progress)) + max(40px,calc(env(safe-area-inset-top,0px) + 20px)) * var(--heading-progress));
+  padding-bottom:calc(28px - 14px * var(--heading-progress));
+  margin-left:-28px; margin-right:-28px; padding-left:28px; padding-right:28px;
+  background:#fff;
+}
+.water-heading-title-slot { height:calc(var(--page-heading-size,26px) * 1.35 * (1 - .23 * var(--heading-progress))); }
+#settingsPage.water-collapsing-page, #loginPage.water-collapsing-page,
+.water-page-view #historyModal.water-collapsing-page { padding-top:0; overflow-anchor:none; }
+#settingsPage .water-scroll-heading, #loginPage .water-scroll-heading { background:transparent; }
+.water-scroll-heading h2, .water-page-view .water-scroll-heading #historyModalTitle {
+  margin:0!important; transform-origin:left top; background:transparent; position:relative; top:auto;
+}
+.water-page-view .water-scroll-heading { margin-left:0; margin-right:0; padding-left:0; padding-right:0; padding-bottom:0; }
+.water-page-view #historyModal .history-card { overflow:hidden; }
+main > section button, .water-record-view button {
+  transition:scale 160ms cubic-bezier(.22,1,.36,1);
+}
+main > section button:active, .water-record-view button:active { scale:.96; }
+.water-page-view #historyModalTitle { transform-origin:left center; }
+.water-record-view .category-options.is-entering .category-segment,
+.water-record-view .category-dividers.is-entering .category-divider,
+.water-page-view .history-day-details { animation:none; }
+.water-page-view .history-motion-managed { overflow-anchor:none; scroll-behavior:auto!important; }
+.water-page-view .history-motion-managed .history-item-month,
+.water-page-view .history-motion-managed .history-day-details { animation:none!important; transition:none!important; }
+.water-page-view #historyModal .history-item-month.is-expanded { border-color:#555; }
+.water-page-view .history-row-pending { clip-path:inset(0 0 100% 0); }
+@media(prefers-reduced-motion:reduce) {
+  main *, .water-record-view *, .water-record-view *::before, .water-record-view *::after {
+    animation-duration:.001ms!important; animation-delay:0ms!important;
+    transition-duration:.001ms!important; scroll-behavior:auto!important;
+  }
+}

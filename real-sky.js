@@ -64,7 +64,7 @@ export function installSky() {
   let outsideEnabled=true;
   let solarEnabled=false,galaxyEnabled=false,solar=null,galaxy=null,galaxyUnavailable=false,solarUnavailable=false;
   let gpuScene=null,gpuUnavailable=false;
-  let canvasComposite=null;
+  let canvasComposite=null,simulatedComposite=null;
   const wanted=()=>enabled||solarEnabled||galaxyEnabled;
   let rotation=null,targetRotation=null,lastDraw=0;
   let lastSnapshot='';
@@ -179,6 +179,11 @@ export function installSky() {
   document.addEventListener('visibilitychange',visibility);
   addEventListener('waterforeground',e=>{foreground=e.detail.active;if(foreground)start();else stop();});
   window.WaterRealSky={get enabled(){return wanted();},get starsEnabled(){return enabled;},
+    drawSimulated(ctx,width,height,paint,waterPoints,outsideColor){
+      if(!simulatedComposite)simulatedComposite=new SkyCanvasComposite();
+      paint(simulatedComposite.begin(width,height));
+      simulatedComposite.finish(ctx,waterPoints,width,height,outsideColor);
+    },
     get simulatedEnabled(){return simulatedEnabled;},
     get outsideEnabled(){return outsideEnabled;},
     get solarEnabled(){return solarEnabled;},get galaxyEnabled(){return galaxyEnabled;},draw(ctx,width,height,fallback,waterPoints,outsideColor){
